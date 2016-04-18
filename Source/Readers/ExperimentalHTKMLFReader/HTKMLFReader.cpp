@@ -27,9 +27,9 @@ std::vector<IDataDeserializerPtr> CreateDeserializers(const ConfigParameters& re
     ConfigHelper config(readerConfig);
 
     config.GetDataNamesFromConfig(featureNames, labelNames, notused, notused);
-    if (featureNames.size() < 1 || labelNames.size() < 1)
+    if (featureNames.size() < 1)
     {
-        InvalidArgument("Network needs at least 1 feature and 1 label specified.");
+        InvalidArgument("Network needs at least 1 feature specified.");
     }
 
     CorpusDescriptorPtr corpus = std::make_shared<CorpusDescriptor>();
@@ -143,7 +143,7 @@ HTKMLFReader::HTKMLFReader(MemoryProviderPtr provider,
     // TODO: Should do more perf tests before unifying these two.
 
     // TODO: As the next step the packers will be moved out of the readers into the
-    // TODO: core CNTK. They are format agnostic and can be used with any type of 
+    // TODO: core CNTK. They are format agnostic and can be used with any type of
     // TODO: deserializers.
     switch (m_packingMode)
     {
@@ -185,10 +185,10 @@ void HTKMLFReader::StartEpoch(const EpochConfiguration& config)
             // Old config, the truncation length is specified as the minibatch size.
             // In this case the truncation size is mbSize
             // and the real minibatch size is truncation size * nbruttsineachrecurrentiter
-            fprintf(stderr, "Legacy configuration is used for truncated BPTT mode, please adapt the config to explicitly specify truncationLength.");
+            fprintf(stderr, "Legacy configuration is used for truncated BPTT mode, please adapt the config to explicitly specify truncationLength.\n");
             truncationLength = minibatchSize;
             size_t numParallelSequences = m_numParallelSequencesForAllEpochs[config.m_epochIndex];
-            minibatchSize = numParallelSequences * truncationLength;
+            minibatchSize = numParallelSequences * truncationLength; // TODO divide by number of workers
         }
         
         EpochConfiguration bpttConfig;
