@@ -41,14 +41,16 @@ private:
     {
         std::string m_path;
         size_t m_classId;
+        std::vector<float> m_floatlabel;
+        std::vector<double> m_doublelabel;
     };
-
+    
     class ImageChunk;
 
     // A helper class for generation of type specific labels (currently float/double only).
-    class LabelGenerator;
-    typedef std::shared_ptr<LabelGenerator> LabelGeneratorPtr;
-    LabelGeneratorPtr m_labelGenerator;
+    class ClassificationLabelGenerator;
+    typedef std::shared_ptr<ClassificationLabelGenerator> ClassificationLabelGeneratorPtr;
+    ClassificationLabelGeneratorPtr m_classificationLabelGenerator;
 
     // Sequence descriptions for all input data.
     std::vector<ImageSequenceDescription> m_imageSequences;
@@ -58,6 +60,9 @@ private:
 
     // whether images shall be loaded in grayscale 
     bool m_grayscale;
+
+    // Classification or Regression labels
+    LabelType m_labelType;
 
     // Not using nocase_compare here as it's not correct on Linux.
     using PathReaderMap = std::unordered_map<std::string, std::shared_ptr<ByteReader>>;

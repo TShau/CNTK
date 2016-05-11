@@ -14,11 +14,11 @@
 
 namespace Microsoft { namespace MSR { namespace CNTK {
 
-class ImageDataDeserializer::LabelGenerator
+class ImageDataDeserializer::ClassificationLabelGenerator
 {
 public:
-    virtual void CreateLabelFor(size_t classId, SparseSequenceData& data) = 0;
-    virtual ~LabelGenerator() { }
+    virtual void CreateLabelFor(const ImageSequenceDescription& desc, SparseSequenceData& data) = 0;
+    virtual ~ClassificationLabelGenerator() { }
 };
 
 // A helper class to generate a typed label in a sparse format.
@@ -27,10 +27,10 @@ public:
 // and a single one for a category it belongs to: [ 0, .. 0.. 1 .. 0 ]
 // The class is parameterized because the representation of 1 is type specific.
 template <class TElement>
-class TypedLabelGenerator : public ImageDataDeserializer::LabelGenerator
+class TypedClassificationLabelGenerator : public ImageDataDeserializer::ClassificationLabelGenerator
 {
 public:
-    TypedLabelGenerator(size_t labelDimension) : m_value(1), m_indices(labelDimension)
+    TypedClassificationLabelGenerator(size_t labelDimension) : m_value(1), m_indices(labelDimension)
     {
         if (labelDimension > numeric_limits<IndexType>::max())
         {
@@ -40,13 +40,13 @@ public:
         iota(m_indices.begin(), m_indices.end(), 0);
     }
 
-    virtual void CreateLabelFor(size_t classId, SparseSequenceData& data) override
+    virtual void CreateLabelFor(const ImageDataDeserializer::ImageSequenceDescription& desc, SparseSequenceData& data) override
     {
         data.m_nnzCounts.resize(1);
         data.m_nnzCounts[0] = 1;
         data.m_totalNnzCount = 1;
         data.m_data = &m_value;
-        data.m_indices = &(m_indices[classId]);
+        data.m_indices = &(m_indices[desc.m_classId]);
     }
 
 private:
@@ -67,7 +67,7 @@ class ImageDataDeserializer::ImageChunk : public Chunk, public std::enable_share
     ImageDataDeserializer& m_parent;
 
 public:
-    ImageChunk(ImageSequenceDescription& description, ImageDataDeserializer& parent)
+    ImageChunk(ImageSequenceDescription description, ImageDataDeserializer& parent)
         : m_description(description), m_parent(parent)
     {
     }
@@ -107,9 +107,22 @@ public:
         image->m_chunk = shared_from_this();
         result.push_back(image);
 
-        SparseSequenceDataPtr label = std::make_shared<SparseSequenceData>();
+        SequenceDataPtr label;
+        LabelType type = m_parent.m_labelType;
+        if (type == LabelType::Classification)
+        {
+            auto temp_label = std::make_shared<SparseSequenceData>(); // temp variable needed to avoid dynamic cast in the next line
+            m_parent.m_classificationLabelGenerator->CreateLabelFor(imageSequence, *temp_label);
+            label = temp_label;
+        }
+        else
+        {
+            assert(type == LabelType::Regression);
+            label = std::make_shared<DenseSequenceData>();
+            label->m_data = m_parent.m_featureElementType == ElementType::tfloat ? (void*)imageSequence.m_floatlabel.data() : (void*)imageSequence.m_doublelabel.data();
+        }
+
         label->m_chunk = shared_from_this();
-        m_parent.m_labelGenerator->CreateLabelFor(imageSequence.m_classId, *label);
         label->m_numberOfSamples = 1;
         result.push_back(label);
     }
@@ -121,14 +134,21 @@ ImageDataDeserializer::ImageDataDeserializer(const ConfigParameters& config)
     m_streams = configHelper.GetStreams();
     assert(m_streams.size() == 2);
     m_grayscale = configHelper.UseGrayscale();
-	const auto& label = m_streams[configHelper.GetLabelStreamId()];
+    const auto& label = m_streams[configHelper.GetLabelStreamId()];
     const auto& feature = m_streams[configHelper.GetFeatureStreamId()];
 
     // Expect data in HWC.
     ImageDimensions dimensions(*feature->m_sampleLayout, configHelper.GetDataFormat());
     feature->m_sampleLayout = std::make_shared<TensorShape>(dimensions.AsTensorShape(HWC));
 
-    label->m_storageType = StorageType::sparse_csc;
+    m_labelType = configHelper.GetLabelType();
+    switch (m_labelType)
+    {
+    case LabelType::Classification: label->m_storageType = StorageType::sparse_csc; break;
+    case LabelType::Regression: label->m_storageType = StorageType::dense; break;
+    default: RuntimeError("Unsupported label type. Must be Classification (default) or Regression.");
+    }
+
     feature->m_storageType = StorageType::dense;
 
     m_featureElementType = feature->m_elementType;
@@ -136,11 +156,13 @@ ImageDataDeserializer::ImageDataDeserializer(const ConfigParameters& config)
 
     if (label->m_elementType == ElementType::tfloat)
     {
-        m_labelGenerator = std::make_shared<TypedLabelGenerator<float>>(labelDimension);
+        /* DO EVEN MORE STUFF */
+        m_classificationLabelGenerator = std::make_shared<TypedClassificationLabelGenerator<float>>(labelDimension);
     }
     else if (label->m_elementType == ElementType::tdouble)
     {
-        m_labelGenerator = std::make_shared<TypedLabelGenerator<double>>(labelDimension);
+        /* DO EVEN MORE STUFF */
+        m_classificationLabelGenerator = std::make_shared<TypedClassificationLabelGenerator<double>>(labelDimension);
     }
     else
     {
@@ -186,6 +208,7 @@ void ImageDataDeserializer::CreateSequenceDescriptions(std::string mapPath, size
     std::string line;
     PathReaderMap knownReaders;
     ImageSequenceDescription description;
+
     description.m_numberOfSamples = 1;
     description.m_isValid = true;
 
@@ -193,29 +216,68 @@ void ImageDataDeserializer::CreateSequenceDescriptions(std::string mapPath, size
     {
         std::stringstream ss(line);
         std::string imagePath;
-        std::string classId;
-        if (!std::getline(ss, imagePath, '\t') || !std::getline(ss, classId, '\t'))
+        std::string read;
+        std::vector<float> float_vec;
+        std::vector<double> double_vec;
+        size_t cid = 0;
+        float f = 0.0f;
+        double d = 0.0;
+
+        switch (m_labelType)
+        {
+        case LabelType::Classification:
+            if (!std::getline(ss, imagePath, '\t') || !std::getline(ss, read, '\t'))
             RuntimeError("Invalid map file format, must contain 2 tab-delimited columns, line %" PRIu64 " in file %s.", lineIndex, mapPath.c_str());
 
-        char* eptr;
-        errno = 0;
-        size_t cid = strtoull(classId.c_str(), &eptr, 10);
-        if (classId.c_str() == eptr || errno == ERANGE)
-            RuntimeError("Cannot parse label value on line %" PRIu64 ", second column, in file %s.", lineIndex, mapPath.c_str());
+            char* eptr;
+            errno = 0;
+            cid = strtoull(read.c_str(), &eptr, 10);
+            if (read.c_str() == eptr || errno == ERANGE)
+                RuntimeError("Cannot parse label value on line %" PRIu64 ", second column, in file %s.", lineIndex, mapPath.c_str());
 
-        if (cid >= labelDimension)
-        {
-            RuntimeError(
-                "Image '%s' has invalid class id '%" PRIu64 "'. Expected label dimension is '%" PRIu64 "'. Line %" PRIu64 " in file %s.",
-                imagePath.c_str(), cid, labelDimension, lineIndex, mapPath.c_str());
+            if (cid >= labelDimension)
+            {
+                RuntimeError(
+                    "Image '%s' has invalid class id '%" PRIu64 "'. Expected label dimension is '%" PRIu64 "'. Line %" PRIu64 " in file %s.",
+                    imagePath.c_str(), cid, labelDimension, lineIndex, mapPath.c_str());
+            } break;
+
+        case LabelType::Regression: 
+            if (!std::getline(ss, imagePath, '\t'))
+                RuntimeError("Could not read map file, line %" PRIu64 " in file %s.", lineIndex, mapPath.c_str());
+            for (size_t i = 0; i < labelDimension; ++i)
+            {
+                auto invoke_error = [=](){RuntimeError("Cannot parse label value on line %" PRIu64 ", column %d, in file %s.", lineIndex, i, mapPath.c_str()); };
+                if (!std::getline(ss, read, '\t'))
+                    invoke_error();
+                char* eptr;
+                errno = 0;
+                d = strtod(read.c_str(), &eptr);
+                if (read.c_str() == eptr || errno == ERANGE)
+                    invoke_error();
+                f = static_cast<float>(d);        
+                
+                if (m_featureElementType == ElementType::tfloat)
+                    float_vec.push_back(f);
+                else
+                    double_vec.push_back(d);
+            }
+            break;
+
+        default: RuntimeError("Unsupported label type. Must be Classification (default) or Regression.");
         }
-
+                
         for (size_t start = curId; curId < start + itemsPerLine; curId++)
         {
             description.m_id = curId;
             description.m_chunkId = curId;
             description.m_path = imagePath;
+            
+            // two out of the three lines below will effectively do nothing
             description.m_classId = cid;
+            description.m_floatlabel = float_vec;
+            description.m_doublelabel = double_vec; 
+            
             description.m_key.m_sequence = description.m_id;
             description.m_key.m_sample = 0;
 
@@ -280,7 +342,7 @@ cv::Mat ImageDataDeserializer::ReadImage(size_t seqId, const std::string& path, 
 
 cv::Mat FileByteReader::Read(size_t, const std::string& path, bool grayscale)
 {
-	assert(!path.empty());
+    assert(!path.empty());
 
     return cv::imread(path, grayscale ? cv::IMREAD_GRAYSCALE : cv::IMREAD_COLOR);
 }

@@ -65,19 +65,19 @@ ImageConfigHelper::ImageConfigHelper(const ConfigParameters& config)
     features->m_storageType = StorageType::dense;
     m_streams.push_back(features);
 
-    ConfigParameters label = config(labelNames[0]);
-    size_t labelDimension = label("labelDim");
+    ConfigParameters labelSection = config(labelNames[0]);
+    size_t labelDimension = labelSection("labelDim");
 
-    auto labelSection = std::make_shared<StreamDescription>();
-    labelSection->m_id = 1;
-    labelSection->m_name = msra::strfun::utf16(label.ConfigName());
-    labelSection->m_sampleLayout = std::make_shared<TensorShape>(labelDimension);
-    labelSection->m_storageType = StorageType::dense;
-    m_streams.push_back(labelSection);
+    auto label = std::make_shared<StreamDescription>();
+    label->m_id = 1;
+    label->m_name = msra::strfun::utf16(labelSection.ConfigName());
+    label->m_sampleLayout = std::make_shared<TensorShape>(labelDimension);
+    label->m_storageType = StorageType::dense;
+    m_streams.push_back(label);
 
     m_mapPath = config(L"file");
 
-    m_grayscale = config(L"grayscale", false);
+    m_grayscale = config(L"grayscale", c == 1);
     std::string rand = config(L"randomize", "auto");
 
     if (AreEqualIgnoreCase(rand, "auto"))
@@ -93,17 +93,31 @@ ImageConfigHelper::ImageConfigHelper(const ConfigParameters& config)
         RuntimeError("'randomize' parameter must be set to 'auto' or 'none'");
     }
 
+    std::string type = labelSection(L"labelType", "classification");
+    if (AreEqualIgnoreCase(type, "classification"))
+    {
+        m_labelType = LabelType::Classification;
+    }
+    else if (AreEqualIgnoreCase(type, "regression"))
+    {
+        m_labelType = LabelType::Regression;
+    }
+    else
+    {
+        RuntimeError("'labelType' parameter must be set to 'classification' or 'regression'");
+    }
+    
     // Identify precision
     string precision = config.Find("precision", "float");
     if (AreEqualIgnoreCase(precision, "float"))
     {
         features->m_elementType = ElementType::tfloat;
-        labelSection->m_elementType = ElementType::tfloat;
+        label->m_elementType = ElementType::tfloat;
     }
     else if (AreEqualIgnoreCase(precision, "double"))
     {
         features->m_elementType = ElementType::tdouble;
-        labelSection->m_elementType = ElementType::tdouble;
+        label->m_elementType = ElementType::tdouble;
     }
     else
     {
@@ -112,7 +126,7 @@ ImageConfigHelper::ImageConfigHelper(const ConfigParameters& config)
 
     m_cpuThreadCount = config(L"numCPUThreads", 0);
 
-    m_multiViewCrop = AreEqualIgnoreCase((string)featureSection(L"cropType", ""), "multiview10");
+    m_multiViewCrop = AreEqualIgnoreCase((string)featureSection(L"cropType", "center"), "multiview10");
 }
 
 std::vector<StreamDescriptionPtr> ImageConfigHelper::GetStreams() const

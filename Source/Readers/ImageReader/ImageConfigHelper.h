@@ -12,6 +12,8 @@
 
 namespace Microsoft { namespace MSR { namespace CNTK {
 
+enum class LabelType { Classification, Regression };
+
 // A helper class for image specific parameters.
 // A simple wrapper around CNTK ConfigParameters.
 class ImageConfigHelper
@@ -50,10 +52,15 @@ public:
     {
         return m_grayscale;
     }
-	
-	bool IsMultiViewCrop() const
+    
+    bool IsMultiViewCrop() const
     {
         return m_multiViewCrop;
+    }
+
+    LabelType GetLabelType() const
+    {
+        return m_labelType;
     }
 
 private:
@@ -67,6 +74,8 @@ private:
     bool m_randomize;
     bool m_multiViewCrop;
     bool m_grayscale;
+
+    LabelType m_labelType;
 };
 
 typedef std::shared_ptr<ImageConfigHelper> ImageConfigHelperPtr;
