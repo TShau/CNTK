@@ -67,7 +67,7 @@ class ImageDataDeserializer::ImageChunk : public Chunk, public std::enable_share
     ImageDataDeserializer& m_parent;
 
 public:
-    ImageChunk(ImageSequenceDescription description, ImageDataDeserializer& parent)
+    ImageChunk(ImageSequenceDescription& description, ImageDataDeserializer& parent)
         : m_description(description), m_parent(parent)
     {
     }
