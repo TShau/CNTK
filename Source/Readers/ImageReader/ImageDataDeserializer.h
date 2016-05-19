@@ -285,11 +285,11 @@ private:
     };
 
     template<LabelType labelType, class SequenceType>
-    void CreateLabelFor(const ImageSequenceDescription<labelType, PrecisionType>& desc, SequenceType& data);
+    void CreateLabelFor(ImageSequenceDescription<labelType, PrecisionType>& desc, SequenceType& data);
 
     // Specialization for classification
     template<>
-    void ImageDataDeserializer::CreateLabelFor(const ImageSequenceDescription<LabelType::Classification, PrecisionType>& desc, SparseSequenceData& data)
+    void ImageDataDeserializer::CreateLabelFor(ImageSequenceDescription<LabelType::Classification, PrecisionType>& desc, SparseSequenceData& data)
     {
         static IndexType one(1);
         static std::vector<IndexType> indices(m_labelDimension, IndexType(0));
@@ -302,9 +302,9 @@ private:
 
     // Specialization for regression
     template<>
-    void CreateLabelFor(const ImageSequenceDescription<LabelType::Regression, PrecisionType>& desc, DenseSequenceData& data)
+    void CreateLabelFor(ImageSequenceDescription<LabelType::Regression, PrecisionType>& desc, DenseSequenceData& data)
     {
-        data.m_data = (void*)desc.m_label.data();
+        data.m_data = static_cast<void*>(desc.m_label.data());
     }
 
     // whether images shall be loaded in grayscale 
