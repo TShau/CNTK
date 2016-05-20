@@ -31,7 +31,7 @@ BOOST_AUTO_TEST_CASE(ImageReaderSimple)
         4,
         1,
         1,
-        0,
+        1,
         0,
         1);
 }
@@ -108,7 +108,7 @@ BOOST_AUTO_TEST_CASE(ImageReaderSimpleRegressionFloat)
         4,
         1,
         1,
-        0,
+        1,
         0,
         1);
 }
@@ -125,7 +125,7 @@ BOOST_AUTO_TEST_CASE(ImageReaderSimpleRegressionDouble)
         4,
         1,
         1,
-        0,
+        1,
         0,
         1);
 }
