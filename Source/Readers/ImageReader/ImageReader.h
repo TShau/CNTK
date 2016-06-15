@@ -29,6 +29,8 @@ public:
     // Reads a single minibatch.
     Minibatch ReadMinibatch() override;
 
+    void print_out();
+
 private:
     // All streams this reader provides.
     std::vector<StreamDescriptionPtr> m_streams;

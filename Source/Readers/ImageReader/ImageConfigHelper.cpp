@@ -6,6 +6,7 @@
 #include "stdafx.h"
 #include "ImageConfigHelper.h"
 #include "StringUtil.h"
+#include <iostream>
 
 namespace Microsoft { namespace MSR { namespace CNTK {
 
@@ -68,13 +69,14 @@ ImageConfigHelper::ImageConfigHelper(const ConfigParameters& config)
     ConfigParameters labelSection = config(labelNames[0]);
     size_t labelDimension = labelSection("labelDim");
 
+
     auto label = std::make_shared<StreamDescription>();
     label->m_id = 1;
     label->m_name = msra::strfun::utf16(labelSection.ConfigName());
     label->m_sampleLayout = std::make_shared<TensorShape>(labelDimension);
     label->m_storageType = StorageType::dense;
     m_streams.push_back(label);
-
+    
     m_mapPath = config(L"file");
 
     m_grayscale = config(L"grayscale", c == 1);

@@ -85,7 +85,7 @@ ImageTransformerBase::Apply(SequenceDataPtr sequence,
     result->m_image = buffer;
     result->m_data = buffer.ptr();
     result->m_numberOfSamples = inputSequence.m_numberOfSamples;
-
+    
     ImageDimensions outputDimensions(buffer.cols, buffer.rows, buffer.channels());
     result->m_sampleLayout = std::make_shared<TensorShape>(outputDimensions.AsTensorShape(HWC));
     return result;
