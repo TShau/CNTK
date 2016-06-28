@@ -41,8 +41,6 @@ void ImageTransformerBase::Initialize(TransformerPtr next,
     const auto &inputStreams = GetInputStreams();
     m_outputStreams.resize(inputStreams.size());
     std::copy(inputStreams.begin(), inputStreams.end(), m_outputStreams.begin());
-
-    m_labelType = m_imageConfig->GetLabelType();
 }
 
 SequenceDataPtr
@@ -74,11 +72,8 @@ ImageTransformerBase::Apply(SequenceDataPtr sequence,
     auto result = std::make_shared<ImageSequenceData>();
     int type = CV_MAKETYPE(typeId, channels);
 
-
     cv::Mat buffer = cv::Mat(rows, columns, type, inputSequence.m_data);
-    cout << "ImageTransformerBase Call Apply " << endl;
     Apply(sequence->m_id, buffer);
-    cout << "ImageTransformerBase End Apply" << endl;
     if (!buffer.isContinuous())
     {
         buffer = buffer.clone();
@@ -109,7 +104,6 @@ void CropTransformer::Initialize(TransformerPtr next,
 
 void CropTransformer::InitFromConfig(const ConfigParameters &config)
 {
-    cout << "CropTransformer::InitfromConfig" << '\n';
     floatargvector cropRatio = config(L"cropRatio", "1.0");
     m_cropRatioMin = cropRatio[0];
     m_cropRatioMax = cropRatio[1];
@@ -183,21 +177,24 @@ void CropTransformer::Apply(size_t id, cv::Mat &mat)
     // TODO: Cut out Label if it gets value outside [0,1]
 
     cv::Rect cropRect = GetCropRect(m_imageConfig->GetCropType(), viewIndex, mat.rows, mat.cols, ratio, *rng);
+   
+    // Input variables for handling cropping on Label
     double label_x = 0.5;
     double label_y = 0.5;
 
-    double xOff = (double)cropRect.x / (double)mat.cols;
-    double yOff = (double)cropRect.y / (double)mat.rows;
-    label_x = (label_x - xOff) / ratio;
-    label_y = (label_y - yOff) / ratio;
-
-    
-
-    //cout << "Rect : " << xOff << " " << yOff << " "  << endl;
-    //cout << "Label : " << label_x << " " << label_y<< endl;
-
-
-
+    switch (m_imageConfig->GetLabelType())
+    {
+    case LabelType::Regression:
+        label_x = (label_x - ((double)cropRect.x / (double)mat.cols)) / ratio;
+        label_y = (label_y - ((double)cropRect.y / (double)mat.rows)) / ratio;
+        cout << "RegressionLabel : " << label_x << " " << label_y<< endl;
+        break;
+    case LabelType::Classification:
+        break;
+    default:
+        ;
+    }
+  
     mat = mat(cropRect);
 
 
@@ -336,7 +333,6 @@ cv::Rect CropTransformer::GetCropRect(CropType type, int viewIndex, int crow, in
 void ScaleTransformer::Initialize(TransformerPtr next,
                                   const ConfigParameters &readerConfig)
 {
-    cout << "ScaleTransformer::Initialize" << endl;
     ImageTransformerBase::Initialize(next, readerConfig);
     m_interpMap.emplace("nearest", cv::INTER_NEAREST);
     m_interpMap.emplace("linear", cv::INTER_LINEAR);
@@ -403,7 +399,6 @@ void ScaleTransformer::Apply(size_t id, cv::Mat &mat)
 void MeanTransformer::Initialize(TransformerPtr next,
                                  const ConfigParameters &readerConfig)
 {
-    cout << "MeanTransformer::Initialize" << endl;
     ImageTransformerBase::Initialize(next, readerConfig);
 
     auto featureStreamIds = GetAppliedStreamIds();
@@ -457,7 +452,6 @@ void MeanTransformer::Apply(size_t id, cv::Mat &mat)
 void TransposeTransformer::Initialize(TransformerPtr next,
                                       const ConfigParameters &readerConfig)
 {
-    cout << "TransposeTransformer::Initialize" << endl;
     TransformerBase::Initialize(next, readerConfig);
 
     // Currently we only support a single stream.
@@ -549,7 +543,6 @@ SequenceDataPtr TransposeTransformer::TypedApply(SequenceDataPtr sequence,
 void IntensityTransformer::Initialize(TransformerPtr next,
                                  const ConfigParameters &readerConfig)
 {
-    cout << "IntensityTransformer::Initialize" << endl;
     ImageTransformerBase::Initialize(next, readerConfig);
 
     auto featureStreamIds = GetAppliedStreamIds();
@@ -640,7 +633,6 @@ void IntensityTransformer::Apply(cv::Mat &mat)
 
 void ColorTransformer::Initialize(TransformerPtr next, const ConfigParameters &readerConfig)
 {
-    cout << "ColorTransformer::Initialize" << endl;
     ImageTransformerBase::Initialize(next, readerConfig);
 
     auto featureStreamIds = GetAppliedStreamIds();

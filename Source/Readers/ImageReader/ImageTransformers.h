@@ -63,8 +63,7 @@ private:
     std::vector<StreamDescriptionPtr> m_outputStreams;
     std::vector<StreamId> m_appliedStreamIds;
     unsigned int m_seed;
-    LabelType m_labelType;
-
+   
 };
 
 // Crop transformation of the image.

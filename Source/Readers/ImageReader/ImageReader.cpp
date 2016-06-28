@@ -90,7 +90,6 @@ ImageReader::ImageReader(MemoryProviderPtr provider,
 
     TransformerPtr last = mean;
 
-    cout << "After Transform" << endl;
     if (configHelper.GetDataFormat() == CHW)
     {
         last = std::make_shared<TransposeTransformer>();
