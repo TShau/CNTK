@@ -89,6 +89,8 @@ ImageReader::ImageReader(MemoryProviderPtr provider,
     mean->Initialize(intensity, config);
 
     TransformerPtr last = mean;
+
+    cout << "After Transform" << endl;
     if (configHelper.GetDataFormat() == CHW)
     {
         last = std::make_shared<TransposeTransformer>();
@@ -116,7 +118,6 @@ void ImageReader::StartEpoch(const EpochConfiguration& config)
     {
         RuntimeError("Epoch size cannot be 0.");
     }
-
     m_transformer->StartEpoch(config);
     m_packer->StartEpoch(config);
 }

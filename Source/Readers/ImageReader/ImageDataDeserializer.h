@@ -152,6 +152,9 @@ private:
         if (!std::getline(ss, imagePath, '\t'))
             RuntimeError("Could not read map file, line %" PRIu64 " in file %s.", lineIndex, mapPath.c_str());
 
+        cout << line << '\n';
+        //cout << imagePath << '\n';
+
         for (size_t i = 0; i < m_labelDimension; ++i)
         {
             auto invoke_error = [=]()
@@ -168,8 +171,11 @@ private:
                 invoke_error();
 
             result.push_back(value);
+
+            //cout << "Label: " <<read.c_str() << '\n';
         }
 
+        
         description.m_path = imagePath;
         description.m_label = result;
     };
@@ -192,11 +198,11 @@ private:
         description.m_numberOfSamples = 1;
         description.m_isValid = true;
 
+        // NOTE: got through each line in Cfg file
         for (size_t lineIndex = 0; std::getline(mapFile, line); ++lineIndex)
         {
             parseLine(line, lineIndex, mapPath, description);
             std::string imagePath = description.m_path;
-            
             for (size_t start = curId; curId < start + itemsPerLine; curId++)
             {
                 description.m_id = curId;

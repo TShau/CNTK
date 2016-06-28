@@ -41,6 +41,8 @@ void ImageTransformerBase::Initialize(TransformerPtr next,
     const auto &inputStreams = GetInputStreams();
     m_outputStreams.resize(inputStreams.size());
     std::copy(inputStreams.begin(), inputStreams.end(), m_outputStreams.begin());
+
+    m_labelType = m_imageConfig->GetLabelType();
 }
 
 SequenceDataPtr
@@ -71,8 +73,12 @@ ImageTransformerBase::Apply(SequenceDataPtr sequence,
 
     auto result = std::make_shared<ImageSequenceData>();
     int type = CV_MAKETYPE(typeId, channels);
+
+
     cv::Mat buffer = cv::Mat(rows, columns, type, inputSequence.m_data);
+    cout << "ImageTransformerBase Call Apply " << endl;
     Apply(sequence->m_id, buffer);
+    cout << "ImageTransformerBase End Apply" << endl;
     if (!buffer.isContinuous())
     {
         buffer = buffer.clone();
@@ -103,9 +109,11 @@ void CropTransformer::Initialize(TransformerPtr next,
 
 void CropTransformer::InitFromConfig(const ConfigParameters &config)
 {
+    cout << "CropTransformer::InitfromConfig" << '\n';
     floatargvector cropRatio = config(L"cropRatio", "1.0");
     m_cropRatioMin = cropRatio[0];
     m_cropRatioMax = cropRatio[1];
+    cout << "Cropratio: "<<m_cropRatioMin << " " <<m_cropRatioMax  << '\n';
 
     if (!(0 < m_cropRatioMin && m_cropRatioMin <= 1.0) ||
         !(0 < m_cropRatioMax && m_cropRatioMax <= 1.0) ||
@@ -131,15 +139,18 @@ void CropTransformer::InitFromConfig(const ConfigParameters &config)
 
 void CropTransformer::StartEpoch(const EpochConfiguration &config)
 {
+    cout << "CropTransformer::StartEpoch " << '\n';
     m_curAspectRatioRadius = m_aspectRatioRadius[config.m_epochIndex];
     if (!(0 <= m_curAspectRatioRadius && m_curAspectRatioRadius <= 1.0))
         InvalidArgument("aspectRatioRadius must be >= 0.0 and <= 1.0");
 
     ImageTransformerBase::StartEpoch(config);
+    cout << "CropTransformer:: End of StartEpoch " << endl;
 }
 
 void CropTransformer::Apply(size_t id, cv::Mat &mat)
 {
+    cout << "CropTransformer::Apply " << '\n';
     auto seed = GetSeed();
     auto rng = m_rngs.pop_or_create([seed]() { return std::make_unique<std::mt19937>(seed); });
 
@@ -166,7 +177,30 @@ void CropTransformer::Apply(size_t id, cv::Mat &mat)
 
     int viewIndex = m_imageConfig->IsMultiViewCrop() ? (int)(id % 10) : 0;
 
-    mat = mat(GetCropRect(m_imageConfig->GetCropType(), viewIndex, mat.rows, mat.cols, ratio, *rng));
+    // Apply Crop Change to Regression Label
+    // TODO: Feed Label from Config and allign them in x,y
+    // TODO: Check if Label is Regression or Classification or something else
+    // TODO: Cut out Label if it gets value outside [0,1]
+
+    cv::Rect cropRect = GetCropRect(m_imageConfig->GetCropType(), viewIndex, mat.rows, mat.cols, ratio, *rng);
+    double label_x = 0.5;
+    double label_y = 0.5;
+
+    double xOff = (double)cropRect.x / (double)mat.cols;
+    double yOff = (double)cropRect.y / (double)mat.rows;
+    label_x = (label_x - xOff) / ratio;
+    label_y = (label_y - yOff) / ratio;
+
+    
+
+    //cout << "Rect : " << xOff << " " << yOff << " "  << endl;
+    //cout << "Label : " << label_x << " " << label_y<< endl;
+
+
+
+    mat = mat(cropRect);
+
+
     if ((m_hFlip && std::bernoulli_distribution()(*rng)) ||
         viewIndex >= 5)
     {
@@ -178,6 +212,7 @@ void CropTransformer::Apply(size_t id, cv::Mat &mat)
 
 CropTransformer::RatioJitterType CropTransformer::ParseJitterType(const std::string &src)
 {
+    cout << "CropTransformer::ParseJitterType " << src << '\n';
     if (src.empty() || AreEqualIgnoreCase(src, "none"))
     {
         return RatioJitterType::None;
@@ -204,6 +239,8 @@ CropTransformer::RatioJitterType CropTransformer::ParseJitterType(const std::str
 cv::Rect CropTransformer::GetCropRect(CropType type, int viewIndex, int crow, int ccol,
                                       double cropRatio, std::mt19937 &rng)
 {
+    // NOTE: crow , ccol = 224 x 224
+    // cout << "MAT: " << crow << " " << ccol << '\n';
     assert(crow > 0);
     assert(ccol > 0);
     assert(0 < cropRatio && cropRatio <= 1.0);
@@ -218,6 +255,7 @@ cv::Rect CropTransformer::GetCropRect(CropType type, int viewIndex, int crow, in
         double factor = 1.0 + UniRealT(-m_curAspectRatioRadius, m_curAspectRatioRadius)(rng);
         double area = cropSize * cropSize;
         double newArea = area * factor;
+        cout << "Factor: "<< factor << endl;
         if (std::bernoulli_distribution()(rng))
         {
             cropSizeX = (int)std::sqrt(newArea);
@@ -285,6 +323,8 @@ cv::Rect CropTransformer::GetCropRect(CropType type, int viewIndex, int crow, in
     default:
         assert(false);
     }
+    cout << "CropRatio " << cropRatio<< endl;
+    cout << "RECT " << xOff << " " << yOff << " " << cropSizeX << " " << cropSizeY << endl;
 
     assert(0 <= xOff && xOff <= ccol - cropSizeX);
     assert(0 <= yOff && yOff <= crow - cropSizeY);
@@ -296,6 +336,7 @@ cv::Rect CropTransformer::GetCropRect(CropType type, int viewIndex, int crow, in
 void ScaleTransformer::Initialize(TransformerPtr next,
                                   const ConfigParameters &readerConfig)
 {
+    cout << "ScaleTransformer::Initialize" << endl;
     ImageTransformerBase::Initialize(next, readerConfig);
     m_interpMap.emplace("nearest", cv::INTER_NEAREST);
     m_interpMap.emplace("linear", cv::INTER_LINEAR);
@@ -362,6 +403,7 @@ void ScaleTransformer::Apply(size_t id, cv::Mat &mat)
 void MeanTransformer::Initialize(TransformerPtr next,
                                  const ConfigParameters &readerConfig)
 {
+    cout << "MeanTransformer::Initialize" << endl;
     ImageTransformerBase::Initialize(next, readerConfig);
 
     auto featureStreamIds = GetAppliedStreamIds();
@@ -415,6 +457,7 @@ void MeanTransformer::Apply(size_t id, cv::Mat &mat)
 void TransposeTransformer::Initialize(TransformerPtr next,
                                       const ConfigParameters &readerConfig)
 {
+    cout << "TransposeTransformer::Initialize" << endl;
     TransformerBase::Initialize(next, readerConfig);
 
     // Currently we only support a single stream.
@@ -506,6 +549,7 @@ SequenceDataPtr TransposeTransformer::TypedApply(SequenceDataPtr sequence,
 void IntensityTransformer::Initialize(TransformerPtr next,
                                  const ConfigParameters &readerConfig)
 {
+    cout << "IntensityTransformer::Initialize" << endl;
     ImageTransformerBase::Initialize(next, readerConfig);
 
     auto featureStreamIds = GetAppliedStreamIds();
@@ -596,6 +640,7 @@ void IntensityTransformer::Apply(cv::Mat &mat)
 
 void ColorTransformer::Initialize(TransformerPtr next, const ConfigParameters &readerConfig)
 {
+    cout << "ColorTransformer::Initialize" << endl;
     ImageTransformerBase::Initialize(next, readerConfig);
 
     auto featureStreamIds = GetAppliedStreamIds();

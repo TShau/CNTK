@@ -63,6 +63,8 @@ private:
     std::vector<StreamDescriptionPtr> m_outputStreams;
     std::vector<StreamId> m_appliedStreamIds;
     unsigned int m_seed;
+    LabelType m_labelType;
+
 };
 
 // Crop transformation of the image.
@@ -98,6 +100,7 @@ private:
     bool m_hFlip;
     doubleargvector m_aspectRatioRadius;
     double m_curAspectRatioRadius;
+
 };
 
 // Scale transformation of the image.
@@ -121,6 +124,7 @@ private:
     size_t m_imgWidth;
     size_t m_imgHeight;
     size_t m_imgChannels;
+
 };
 
 // Mean transformation.
