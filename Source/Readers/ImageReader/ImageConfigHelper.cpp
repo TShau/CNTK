@@ -69,7 +69,6 @@ ImageConfigHelper::ImageConfigHelper(const ConfigParameters& config)
     ConfigParameters labelSection = config(labelNames[0]);
     size_t labelDimension = labelSection("labelDim");
 
-
     auto label = std::make_shared<StreamDescription>();
     label->m_id = 1;
     label->m_name = msra::strfun::utf16(labelSection.ConfigName());

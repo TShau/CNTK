@@ -37,6 +37,7 @@ public:
         m_streams = configHelper.GetStreams();
         assert(m_streams.size() == 2);
         m_grayscale = configHelper.UseGrayscale();
+        cout << "aaa" << configHelper.GetLabelStreamId() << endl;
         const auto& label = m_streams[configHelper.GetLabelStreamId()];
         const auto& feature = m_streams[configHelper.GetFeatureStreamId()];
 
@@ -62,6 +63,7 @@ public:
     virtual ChunkPtr GetChunk(size_t chunkId) override
     {
         auto sequenceDescription = m_imageSequences[chunkId];
+        cout << "GetChunk " << chunkId << " : "<< sequenceDescription.m_path  << endl;
         return std::make_shared<ImageChunk<labelType,PrecisionType>>(sequenceDescription, *this);
     }
 
@@ -169,7 +171,6 @@ private:
             value = static_cast<PrecisionType>(strtod(read.c_str(), &eptr));
             if (read.c_str() == eptr || errno == ERANGE)
                 invoke_error();
-
             result.push_back(value);
 
             //cout << "Label: " <<read.c_str() << '\n';
@@ -319,6 +320,7 @@ private:
     template<>
     void CreateLabelFor(ImageSequenceDescription<LabelType::Regression, PrecisionType>& desc, DenseSequenceData& data)
     {
+        cout << "createLabelFor " << desc.m_label.at(0) << " " << desc.m_label.at(1) << " " << desc.m_label.at(2) << " " << desc.m_label.at(3) <<  endl;
         data.m_data = static_cast<void*>(desc.m_label.data());
     }
 

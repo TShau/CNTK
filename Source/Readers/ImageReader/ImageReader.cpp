@@ -102,7 +102,6 @@ ImageReader::ImageReader(MemoryProviderPtr provider,
         m_provider,
         m_transformer,
         m_streams);
-//    print_out();
 }
 
 std::vector<StreamDescriptionPtr> ImageReader::GetStreamDescriptions()
@@ -117,25 +116,18 @@ void ImageReader::StartEpoch(const EpochConfiguration& config)
     {
         RuntimeError("Epoch size cannot be 0.");
     }
+
+
     m_transformer->StartEpoch(config);
     m_packer->StartEpoch(config);
+
+    std::vector<StreamDescriptionPtr> stream = GetStreamDescriptions();
 }
 
 Minibatch ImageReader::ReadMinibatch()
 {
     assert(m_packer != nullptr);
-//    print_out();
     return m_packer->ReadMinibatch();
-}
-
-void ImageReader::print_out()
-{
-    cout << "OUT Imagereader" << '\n';
-    cout << "m_streams " << m_streams.size() << " " << m_streams.front()->m_sampleLayout->GetNumElements() << '\n';
-//    cout << "m_transformer " << m_transformer->GetNextSequences << '\n';
-//    cout << "m_packer " << m_packer->ReadMinibatch << '\n';
-    cout << "m_seed " << m_seed << '\n';
-    
 }
 
 } } }

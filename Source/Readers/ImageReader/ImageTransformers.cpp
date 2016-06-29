@@ -133,7 +133,8 @@ void CropTransformer::InitFromConfig(const ConfigParameters &config)
 
 void CropTransformer::StartEpoch(const EpochConfiguration &config)
 {
-    cout << "CropTransformer::StartEpoch " << '\n';
+    cout << endl; cout << endl;
+    cout << "CropTransformer:: StartEpoch " << endl;
     m_curAspectRatioRadius = m_aspectRatioRadius[config.m_epochIndex];
     if (!(0 <= m_curAspectRatioRadius && m_curAspectRatioRadius <= 1.0))
         InvalidArgument("aspectRatioRadius must be >= 0.0 and <= 1.0");
@@ -144,7 +145,8 @@ void CropTransformer::StartEpoch(const EpochConfiguration &config)
 
 void CropTransformer::Apply(size_t id, cv::Mat &mat)
 {
-    cout << "CropTransformer::Apply " << '\n';
+    cout << endl;
+    cout << "CropTransformer::Apply, Image ID " << id <<endl ;
     auto seed = GetSeed();
     auto rng = m_rngs.pop_or_create([seed]() { return std::make_unique<std::mt19937>(seed); });
 
@@ -182,12 +184,13 @@ void CropTransformer::Apply(size_t id, cv::Mat &mat)
     double label_x = 0.5;
     double label_y = 0.5;
 
+    cout << "Original RegressionLabel : " << label_x << " " << label_y << endl;
     switch (m_imageConfig->GetLabelType())
     {
     case LabelType::Regression:
         label_x = (label_x - ((double)cropRect.x / (double)mat.cols)) / ratio;
         label_y = (label_y - ((double)cropRect.y / (double)mat.rows)) / ratio;
-        cout << "RegressionLabel : " << label_x << " " << label_y<< endl;
+        cout << "Cropped RegressionLabel : " << label_x << " " << label_y<< endl;
         break;
     case LabelType::Classification:
         break;
