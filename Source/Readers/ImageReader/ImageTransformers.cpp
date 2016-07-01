@@ -55,6 +55,10 @@ ImageTransformerBase::Apply(SequenceDataPtr sequence,
     int rows = static_cast<int>(dimensions.m_height);
     int channels = static_cast<int>(dimensions.m_numChannels);
 
+    //cout << "ImageTransformerBase::Apply Colums " << columns << " Rows " << rows << " Channels " << channels << endl;
+    //cout << "Sequence " << sequence->m_id << endl;
+
+
     int typeId = 0;
     if (inputStream.m_elementType == ElementType::tdouble)
     {
@@ -72,6 +76,14 @@ ImageTransformerBase::Apply(SequenceDataPtr sequence,
     auto result = std::make_shared<ImageSequenceData>();
     int type = CV_MAKETYPE(typeId, channels);
 
+    std::vector<SequenceDataPtr> labelPtr;
+    inputSequence.m_chunk->GetSequence(sequence->m_id, labelPtr);
+    //NOTE Seqeunce[0]=Features , Sequence[1]=Label
+    float *dat = reinterpret_cast<float*>(labelPtr[1]->m_data);
+    cout << "Label " << dat[0] << " " << dat[1] << " " << dat[2] << " " << dat[3] << endl;
+    
+    //TODO: Feed labelPtr to Apply
+    
     cv::Mat buffer = cv::Mat(rows, columns, type, inputSequence.m_data);
     Apply(sequence->m_id, buffer);
     if (!buffer.isContinuous())
@@ -190,7 +202,7 @@ void CropTransformer::Apply(size_t id, cv::Mat &mat)
     case LabelType::Regression:
         label_x = (label_x - ((double)cropRect.x / (double)mat.cols)) / ratio;
         label_y = (label_y - ((double)cropRect.y / (double)mat.rows)) / ratio;
-        cout << "Cropped RegressionLabel : " << label_x << " " << label_y<< endl;
+        cout << "Cropped  RegressionLabel : " << label_x << " " << label_y<< endl;
         break;
     case LabelType::Classification:
         break;
@@ -323,8 +335,7 @@ cv::Rect CropTransformer::GetCropRect(CropType type, int viewIndex, int crow, in
     default:
         assert(false);
     }
-    cout << "CropRatio " << cropRatio<< endl;
-    cout << "RECT " << xOff << " " << yOff << " " << cropSizeX << " " << cropSizeY << endl;
+    cout << "Rect " << xOff << " " << yOff << " " << cropSizeX << " " << cropSizeY << "CropRatio " << cropRatio << endl;
 
     assert(0 <= xOff && xOff <= ccol - cropSizeX);
     assert(0 <= yOff && yOff <= crow - cropSizeY);
@@ -377,6 +388,7 @@ void ScaleTransformer::InitFromConfig(const ConfigParameters &config)
 
 void ScaleTransformer::Apply(size_t id, cv::Mat &mat)
 {
+    cout << "ScaleTransformer::Apply, Image ID " << id << endl;
     UNUSED(id);
     // If matrix has not been converted to the right type, do it now as rescaling
     // requires floating point type.
@@ -438,6 +450,7 @@ void MeanTransformer::InitFromConfig(const ConfigParameters &config)
 
 void MeanTransformer::Apply(size_t id, cv::Mat &mat)
 {
+    cout << "MeanTransformer::Apply, Image ID " << id << endl;
     UNUSED(id);
     assert(m_meanImg.size() == cv::Size(0, 0) ||
            (m_meanImg.size() == mat.size() &&
@@ -484,6 +497,7 @@ TransposeTransformer::Apply(SequenceDataPtr inputSequence,
                             const StreamDescription &inputStream,
                             const StreamDescription &outputStream)
 {
+    cout << "CropTransformer::Apply, Image ID " << inputSequence->m_id << endl;
     if (inputStream.m_elementType == ElementType::tdouble)
     {
         return TypedApply<double>(inputSequence, inputStream, outputStream);
@@ -586,6 +600,7 @@ void IntensityTransformer::StartEpoch(const EpochConfiguration &config)
 
 void IntensityTransformer::Apply(size_t id, cv::Mat &mat)
 {
+    cout << "IntensityTransformer::Apply, Image ID " << id << endl;
     UNUSED(id);
 
     if (m_eigVal.empty() || m_eigVec.empty() || m_curStdDev == 0)
@@ -668,6 +683,7 @@ void ColorTransformer::StartEpoch(const EpochConfiguration &config)
 
 void ColorTransformer::Apply(size_t id, cv::Mat &mat)
 {
+    cout << "ColorTransformer::Apply, Image ID " << id << endl;
     UNUSED(id);
 
     if (m_curBrightnessRadius == 0 && m_curContrastRadius == 0 && m_curSaturationRadius == 0)

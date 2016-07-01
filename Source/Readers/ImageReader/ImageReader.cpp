@@ -71,6 +71,9 @@ ImageReader::ImageReader(MemoryProviderPtr provider,
         randomizer = std::make_shared<NoRandomizer>(deserializer, multithreadedGetNextSequences);
     }
 
+    //std::vector<double> regressionLabel = deserializer->GetRegressionLabel(4);
+
+
     randomizer->Initialize(nullptr, config);
 
     auto cropper = std::make_shared<CropTransformer>();

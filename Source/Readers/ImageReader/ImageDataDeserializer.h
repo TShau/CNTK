@@ -37,7 +37,6 @@ public:
         m_streams = configHelper.GetStreams();
         assert(m_streams.size() == 2);
         m_grayscale = configHelper.UseGrayscale();
-        cout << "aaa" << configHelper.GetLabelStreamId() << endl;
         const auto& label = m_streams[configHelper.GetLabelStreamId()];
         const auto& feature = m_streams[configHelper.GetFeatureStreamId()];
 
@@ -64,6 +63,7 @@ public:
     {
         auto sequenceDescription = m_imageSequences[chunkId];
         cout << "GetChunk " << chunkId << " : "<< sequenceDescription.m_path  << endl;
+
         return std::make_shared<ImageChunk<labelType,PrecisionType>>(sequenceDescription, *this);
     }
 
@@ -288,7 +288,7 @@ private:
             SequenceDataPtr label = createLabeledSequence<labelType>();
             label->m_chunk = shared_from_this();
             label->m_numberOfSamples = 1;
-
+            
             result.push_back(image);
             result.push_back(label);
         }
@@ -320,8 +320,10 @@ private:
     template<>
     void CreateLabelFor(ImageSequenceDescription<LabelType::Regression, PrecisionType>& desc, DenseSequenceData& data)
     {
-        cout << "createLabelFor " << desc.m_label.at(0) << " " << desc.m_label.at(1) << " " << desc.m_label.at(2) << " " << desc.m_label.at(3) <<  endl;
         data.m_data = static_cast<void*>(desc.m_label.data());
+
+        PrecisionType *dat = static_cast<PrecisionType*>(data.m_data);
+        cout << "ImageChunk::CreateLabelFor: " << dat[0] << " " << dat[1] << " " << dat[2] << " " << dat[3] << endl;
     }
 
     // whether images shall be loaded in grayscale 

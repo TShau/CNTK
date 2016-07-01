@@ -8,6 +8,7 @@
 #include <set>
 
 #include "Transformer.h"
+#include <iostream>
 
 namespace Microsoft { namespace MSR { namespace CNTK {
 
@@ -55,7 +56,6 @@ public:
         {
             size_t streamId = appliedStreamIds[j];
             auto& allSamples = samples.m_data[streamId];
-
 //#pragma omp parallel for schedule(static)
             for (int i = 0; i < allSamples.size(); ++i)
             {
