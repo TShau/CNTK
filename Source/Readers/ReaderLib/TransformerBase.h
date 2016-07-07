@@ -19,6 +19,7 @@ public:
     virtual void Initialize(TransformerPtr next,
                             const ConfigParameters &) override
     {
+        cout << "Base Initialize" << endl;
         m_next = next;
         m_inputStreams = m_next->GetStreamDescriptions();
     }

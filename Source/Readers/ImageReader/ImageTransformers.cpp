@@ -57,7 +57,7 @@ ImageTransformerBase::Apply(SequenceDataPtr sequence,
 
     //cout << "ImageTransformerBase::Apply Colums " << columns << " Rows " << rows << " Channels " << channels << endl;
     //cout << "Sequence " << sequence->m_id << endl;
-
+    
 
     int typeId = 0;
     if (inputStream.m_elementType == ElementType::tdouble)
@@ -76,12 +76,16 @@ ImageTransformerBase::Apply(SequenceDataPtr sequence,
     auto result = std::make_shared<ImageSequenceData>();
     int type = CV_MAKETYPE(typeId, channels);
 
+    //NOTE : Label accessible through sequence->m_chunk;
+    
+    /*
     std::vector<SequenceDataPtr> labelPtr;
     inputSequence.m_chunk->GetSequence(sequence->m_id, labelPtr);
     //NOTE Seqeunce[0]=Features , Sequence[1]=Label
     float *dat = reinterpret_cast<float*>(labelPtr[1]->m_data);
     cout << "Label " << dat[0] << " " << dat[1] << " " << dat[2] << " " << dat[3] << endl;
-    
+    */
+
     //TODO: Feed labelPtr to Apply
     
     cv::Mat buffer = cv::Mat(rows, columns, type, inputSequence.m_data);
@@ -95,6 +99,7 @@ ImageTransformerBase::Apply(SequenceDataPtr sequence,
         result->m_original = sequence;
     }
     assert(buffer.isContinuous());
+    result->m_id = sequence->m_id;
     result->m_image = buffer;
     result->m_data = buffer.ptr();
     result->m_numberOfSamples = inputSequence.m_numberOfSamples;
