@@ -502,7 +502,7 @@ TransposeTransformer::Apply(SequenceDataPtr inputSequence,
                             const StreamDescription &inputStream,
                             const StreamDescription &outputStream)
 {
-    cout << "CropTransformer::Apply, Image ID " << inputSequence->m_id << endl;
+    cout << "TransposeTransformer::Apply, Image ID " << inputSequence->m_id << endl;
     if (inputStream.m_elementType == ElementType::tdouble)
     {
         return TypedApply<double>(inputSequence, inputStream, outputStream);
@@ -554,6 +554,7 @@ SequenceDataPtr TransposeTransformer::TypedApply(SequenceDataPtr sequence,
         }
     }
 
+    result->m_id = sequence->m_id;
     result->m_sampleLayout = outputStream.m_sampleLayout;
     result->m_data = result->m_buffer.data();
     result->m_numberOfSamples = inputSequence.m_numberOfSamples;

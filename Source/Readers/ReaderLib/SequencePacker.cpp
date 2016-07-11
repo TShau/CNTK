@@ -11,6 +11,7 @@
 #include <inttypes.h>
 #include "SequencePacker.h"
 #include "ElementTypeUtils.h"
+#include <iostream>
 
 namespace Microsoft { namespace MSR { namespace CNTK {
 
@@ -46,7 +47,7 @@ Minibatch SequencePacker::ReadMinibatch()
     {
         return minibatch;
     }
-
+    cout << "Sequence Packer id : " << batch[1][0]->m_id << endl;
     assert(m_outputStreamDescriptions.size() == batch.size());
 
     for (int streamIndex = 0; streamIndex < batch.size(); ++streamIndex)
