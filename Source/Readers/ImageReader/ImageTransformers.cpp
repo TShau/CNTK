@@ -45,6 +45,7 @@ void ImageTransformerBase::Initialize(TransformerPtr next,
 
 SequenceDataPtr
 ImageTransformerBase::Apply(SequenceDataPtr sequence,
+                            SequenceDataPtr inputSequenceLabel,
                             const StreamDescription &inputStream,
                             const StreamDescription & /*outputStream*/)
 {
@@ -162,7 +163,7 @@ void CropTransformer::StartEpoch(const EpochConfiguration &config)
 
 void CropTransformer::Apply(size_t id, cv::Mat &mat)
 {
-    cout << endl;
+    
     cout << "CropTransformer::Apply, Image ID " << id <<endl ;
     auto seed = GetSeed();
     auto rng = m_rngs.pop_or_create([seed]() { return std::make_unique<std::mt19937>(seed); });
@@ -340,7 +341,7 @@ cv::Rect CropTransformer::GetCropRect(CropType type, int viewIndex, int crow, in
     default:
         assert(false);
     }
-    cout << "Rect " << xOff << " " << yOff << " " << cropSizeX << " " << cropSizeY << "CropRatio " << cropRatio << endl;
+    cout << "Rect " << xOff << " " << yOff << " " << cropSizeX << " " << cropSizeY << " CropRatio " << cropRatio << endl;
 
     assert(0 <= xOff && xOff <= ccol - cropSizeX);
     assert(0 <= yOff && yOff <= crow - cropSizeY);
@@ -499,18 +500,19 @@ void TransposeTransformer::Initialize(TransformerPtr next,
 
 SequenceDataPtr
 TransposeTransformer::Apply(SequenceDataPtr inputSequence,
+                            SequenceDataPtr inputSequenceLabel,
                             const StreamDescription &inputStream,
                             const StreamDescription &outputStream)
 {
     cout << "TransposeTransformer::Apply, Image ID " << inputSequence->m_id << endl;
     if (inputStream.m_elementType == ElementType::tdouble)
     {
-        return TypedApply<double>(inputSequence, inputStream, outputStream);
+        return TypedApply<double>(inputSequence, inputSequenceLabel, inputStream, outputStream);
     }
 
     if (inputStream.m_elementType == ElementType::tfloat)
     {
-        return TypedApply<float>(inputSequence, inputStream, outputStream);
+        return TypedApply<float>(inputSequence, inputSequenceLabel, inputStream, outputStream);
     }
 
     RuntimeError("Unsupported type");
@@ -526,6 +528,7 @@ struct DenseSequenceWithBuffer : DenseSequenceData
 
 template <class TElemType>
 SequenceDataPtr TransposeTransformer::TypedApply(SequenceDataPtr sequence,
+                                                 SequenceDataPtr inputSequenceLabel,
                                                  const StreamDescription &inputStream,
                                                  const StreamDescription &outputStream)
 {

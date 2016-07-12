@@ -62,7 +62,7 @@ public:
     virtual ChunkPtr GetChunk(size_t chunkId) override
     {
         auto sequenceDescription = m_imageSequences[chunkId];
-        cout << "GetChunk " << chunkId << " : "<< sequenceDescription.m_path  << endl;
+        //cout << "GetChunk " << chunkId << " : "<< sequenceDescription.m_path  << endl;
 
         return std::make_shared<ImageChunk<labelType,PrecisionType>>(sequenceDescription, *this);
     }
@@ -323,7 +323,7 @@ private:
         data.m_data = static_cast<void*>(desc.m_label.data());
 
         PrecisionType *dat = static_cast<PrecisionType*>(data.m_data);
-        cout << "ImageChunk::CreateLabelFor: " << dat[0] << " " << dat[1] << " " << dat[2] << " " << dat[3] << endl;
+        //cout << "ImageChunk::CreateLabelFor: " << dat[0] << " " << dat[1] << " " << dat[2] << " " << dat[3] << endl;
     }
 
     // whether images shall be loaded in grayscale 

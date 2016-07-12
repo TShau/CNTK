@@ -53,14 +53,20 @@ public:
         const auto &outputStreams = GetOutputStreams();
 
         // TODO: Move parallelization on the outer loop with collapse.
+
+        // NOTE: allpiedStreamIds only 0 -> change it if Transformation with Regression?
         for (int j = 0; j < appliedStreamIds.size(); ++j)
         {
             size_t streamId = appliedStreamIds[j];
-            auto& allSamples = samples.m_data[streamId];
+            //auto& allSamples = samples.m_data[streamId];
+
+            
+            auto& allSamples = samples.m_data[0];
+            auto& allLabels  = samples.m_data[1];
 //#pragma omp parallel for schedule(static)
             for (int i = 0; i < allSamples.size(); ++i)
             {
-                allSamples[i] = Apply(allSamples[i], *m_inputStreams[streamId], *outputStreams[streamId]);
+                allSamples[i] = Apply(allSamples[i], allLabels[i], *m_inputStreams[streamId], *outputStreams[streamId]);
             }
         }
         return samples;
@@ -81,6 +87,7 @@ protected:
 private:
     // Applies transformation to the sequence.
     virtual SequenceDataPtr Apply(SequenceDataPtr inputSequence,
+                                  SequenceDataPtr inputSequenceLabel,
                                   const StreamDescription &inputStream,
                                   const StreamDescription &outputStream) = 0;
 

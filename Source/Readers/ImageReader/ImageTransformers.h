@@ -50,6 +50,7 @@ protected:
 
     // Applies transformation to the sequence.
     SequenceDataPtr Apply(SequenceDataPtr inputSequence,
+                          SequenceDataPtr inputSequenceLabel,
                           const StreamDescription &inputStream,
                           const StreamDescription &outputStream) override;
 
@@ -158,12 +159,14 @@ protected:
     }
 
     SequenceDataPtr Apply(SequenceDataPtr inputSequence,
+                          SequenceDataPtr inputSequenceLabel,
                           const StreamDescription &inputStream,
                           const StreamDescription &outputStream) override;
 
 private:
     template <class TElement>
     SequenceDataPtr TypedApply(SequenceDataPtr inputSequence,
+                               SequenceDataPtr inputSequenceLabel,
                                const StreamDescription &inputStream,
                                const StreamDescription &outputStream);
 
