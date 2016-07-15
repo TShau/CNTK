@@ -322,7 +322,7 @@ private:
     {
         data.m_data = static_cast<void*>(desc.m_label.data());
 
-        PrecisionType *dat = static_cast<PrecisionType*>(data.m_data);
+        //PrecisionType *dat = static_cast<PrecisionType*>(data.m_data);
         //cout << "ImageChunk::CreateLabelFor: " << dat[0] << " " << dat[1] << " " << dat[2] << " " << dat[3] << endl;
     }
 

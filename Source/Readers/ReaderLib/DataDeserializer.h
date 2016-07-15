@@ -161,7 +161,6 @@ public:
     // Used by deserializers not in driving/primary mode.
     // TODO: Possibly move this out into a separate interface.
     virtual void GetSequenceDescriptionByKey(const KeyType& key, SequenceDescription& description) = 0;
-
     // Gets chunk data given its id.
     virtual ChunkPtr GetChunk(size_t chunkId) = 0;
 

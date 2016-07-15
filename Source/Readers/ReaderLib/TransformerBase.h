@@ -87,7 +87,7 @@ protected:
 private:
     // Applies transformation to the sequence.
     virtual SequenceDataPtr Apply(SequenceDataPtr inputSequence,
-                                  SequenceDataPtr inputSequenceLabel,
+                                  SequenceDataPtr &inputSequenceLabel,
                                   const StreamDescription &inputStream,
                                   const StreamDescription &outputStream) = 0;
 

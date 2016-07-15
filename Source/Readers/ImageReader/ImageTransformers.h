@@ -50,12 +50,12 @@ protected:
 
     // Applies transformation to the sequence.
     SequenceDataPtr Apply(SequenceDataPtr inputSequence,
-                          SequenceDataPtr inputSequenceLabel,
+                          SequenceDataPtr &inputSequenceLabel,
                           const StreamDescription &inputStream,
                           const StreamDescription &outputStream) override;
 
     // The only function that should be redefined by the inherited classes.
-    virtual void Apply(size_t id, cv::Mat &from) = 0;
+    virtual void Apply(size_t id, cv::Mat &from, SequenceDataPtr labelPtr) = 0;
 
 protected:
     std::unique_ptr<ImageConfigHelper> m_imageConfig;
@@ -75,7 +75,7 @@ public:
     void Initialize(TransformerPtr next, const ConfigParameters &readerConfig) override;
 
 private:
-    void Apply(size_t id, cv::Mat &mat) override;
+    void Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr) override;
 
 private:
     enum class RatioJitterType
@@ -113,7 +113,7 @@ public:
 
 private:
     void InitFromConfig(const ConfigParameters &config);
-    void Apply(size_t id, cv::Mat &mat) override;
+    void Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr) override;
 
     using StrToIntMapT = std::unordered_map<std::string, int>;
     StrToIntMapT m_interpMap;
@@ -135,7 +135,7 @@ public:
                             const ConfigParameters &readerConfig) override;
 
 private:
-    void Apply(size_t id, cv::Mat &mat) override;
+    void Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr) override;
     void InitFromConfig(const ConfigParameters &config);
 
     cv::Mat m_meanImg;
@@ -159,14 +159,14 @@ protected:
     }
 
     SequenceDataPtr Apply(SequenceDataPtr inputSequence,
-                          SequenceDataPtr inputSequenceLabel,
+                          SequenceDataPtr &inputSequenceLabel,
                           const StreamDescription &inputStream,
                           const StreamDescription &outputStream) override;
 
 private:
     template <class TElement>
     SequenceDataPtr TypedApply(SequenceDataPtr inputSequence,
-                               SequenceDataPtr inputSequenceLabel,
+                               SequenceDataPtr &inputSequenceLabel,
                                const StreamDescription &inputStream,
                                const StreamDescription &outputStream);
 
@@ -189,7 +189,7 @@ private:
 
     void StartEpoch(const EpochConfiguration &config) override;
 
-    void Apply(size_t id, cv::Mat &mat) override;
+    void Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr) override;
     template <typename ElemType>
     void Apply(cv::Mat &mat);
 
@@ -214,7 +214,7 @@ private:
 
     void StartEpoch(const EpochConfiguration &config) override;
 
-    void Apply(size_t id, cv::Mat &mat) override;
+    void Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr) override;
     template <typename ElemType>
     void Apply(cv::Mat &mat);
 

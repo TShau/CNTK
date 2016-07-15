@@ -45,7 +45,7 @@ void ImageTransformerBase::Initialize(TransformerPtr next,
 
 SequenceDataPtr
 ImageTransformerBase::Apply(SequenceDataPtr sequence,
-                            SequenceDataPtr inputSequenceLabel,
+                            SequenceDataPtr &sequenceLabel,
                             const StreamDescription &inputStream,
                             const StreamDescription & /*outputStream*/)
 {
@@ -77,20 +77,13 @@ ImageTransformerBase::Apply(SequenceDataPtr sequence,
     auto result = std::make_shared<ImageSequenceData>();
     int type = CV_MAKETYPE(typeId, channels);
 
-    //NOTE : Label accessible through sequence->m_chunk;
-    
-    /*
-    std::vector<SequenceDataPtr> labelPtr;
-    inputSequence.m_chunk->GetSequence(sequence->m_id, labelPtr);
-    //NOTE Seqeunce[0]=Features , Sequence[1]=Label
-    float *dat = reinterpret_cast<float*>(labelPtr[1]->m_data);
-    cout << "Label " << dat[0] << " " << dat[1] << " " << dat[2] << " " << dat[3] << endl;
-    */
 
-    //TODO: Feed labelPtr to Apply
-    
+    auto inputSequenceLabel = static_cast<const DenseSequenceData&>(*sequenceLabel.get());
+    std::vector<SequenceDataPtr> labelPtr;
+    inputSequenceLabel.m_chunk->GetSequence(sequence->m_id, labelPtr);
+      
     cv::Mat buffer = cv::Mat(rows, columns, type, inputSequence.m_data);
-    Apply(sequence->m_id, buffer);
+    Apply(sequence->m_id, buffer, labelPtr[1]);
     if (!buffer.isContinuous())
     {
         buffer = buffer.clone();
@@ -122,6 +115,7 @@ void CropTransformer::Initialize(TransformerPtr next,
 
 void CropTransformer::InitFromConfig(const ConfigParameters &config)
 {
+
     floatargvector cropRatio = config(L"cropRatio", "1.0");
     m_cropRatioMin = cropRatio[0];
     m_cropRatioMax = cropRatio[1];
@@ -161,7 +155,7 @@ void CropTransformer::StartEpoch(const EpochConfiguration &config)
     cout << "CropTransformer:: End of StartEpoch " << endl;
 }
 
-void CropTransformer::Apply(size_t id, cv::Mat &mat)
+void CropTransformer::Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr)
 {
     
     cout << "CropTransformer::Apply, Image ID " << id <<endl ;
@@ -195,27 +189,61 @@ void CropTransformer::Apply(size_t id, cv::Mat &mat)
     // TODO: Feed Label from Config and allign them in x,y
     // TODO: Check if Label is Regression or Classification or something else
     // TODO: Cut out Label if it gets value outside [0,1]
+    // TODO : Get Amount of Label Koordinates
+    // TODO : Some identification if Label is Koordinate
+
+
 
     cv::Rect cropRect = GetCropRect(m_imageConfig->GetCropType(), viewIndex, mat.rows, mat.cols, ratio, *rng);
-   
+    
     // Input variables for handling cropping on Label
-    double label_x = 0.5;
-    double label_y = 0.5;
+    
+    int labelSize = 4;
 
-    cout << "Original RegressionLabel : " << label_x << " " << label_y << endl;
-    switch (m_imageConfig->GetLabelType())
+    if (m_imageConfig->GetElementType() == ElementType::tfloat)
     {
-    case LabelType::Regression:
-        label_x = (label_x - ((double)cropRect.x / (double)mat.cols)) / ratio;
-        label_y = (label_y - ((double)cropRect.y / (double)mat.rows)) / ratio;
-        cout << "Cropped  RegressionLabel : " << label_x << " " << label_y<< endl;
-        break;
-    case LabelType::Classification:
-        break;
-    default:
-        ;
+        float *dat = reinterpret_cast<float*>(labelPtr->m_data);
+        for (int it_label = 0; it_label < labelSize; it_label = it_label += 2)
+        {
+            float *label_x = &dat[it_label];
+            float *label_y = &dat[it_label + 1];
+            cout << "Label Coordinate at" << it_label << " : " << *label_x << " " << *label_y << endl;
+            switch (m_imageConfig->GetLabelType())
+            {
+            case LabelType::Regression:
+                *label_x = (*label_x - ((float)cropRect.x / (float)mat.cols)) / ratio;
+                *label_y = (*label_y - ((float)cropRect.y / (float)mat.rows)) / ratio;
+                cout << "Cropped  Coordinate  : " << *label_x << " " << *label_y << endl;
+                break;
+            case LabelType::Classification:
+                break;
+            default:
+                ;
+            }
+        }
     }
-  
+    else if (m_imageConfig->GetElementType() == ElementType::tdouble)
+    {
+        double *dat = reinterpret_cast<double*>(labelPtr->m_data);
+        for (int it_label = 0; it_label < labelSize; it_label = it_label += 2)
+        {
+            double *label_x = &dat[it_label];
+            double *label_y = &dat[it_label + 1];
+            cout << "Label Coordinate at" << it_label << " : " << *label_x << " " << *label_y << endl;
+            switch (m_imageConfig->GetLabelType())
+            {
+            case LabelType::Regression:
+                *label_x = (*label_x - ((double)cropRect.x / (double)mat.cols)) / ratio;
+                *label_y = (*label_y - ((double)cropRect.y / (double)mat.rows)) / ratio;
+                cout << "Cropped  Coordinate  : " << *label_x << " " << *label_y << endl;
+                break;
+            case LabelType::Classification:
+                break;
+            default:
+                ;
+            }
+        }
+    }
     mat = mat(cropRect);
 
 
@@ -392,7 +420,7 @@ void ScaleTransformer::InitFromConfig(const ConfigParameters &config)
         m_interp.push_back(cv::INTER_LINEAR);
 }
 
-void ScaleTransformer::Apply(size_t id, cv::Mat &mat)
+void ScaleTransformer::Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr)
 {
     cout << "ScaleTransformer::Apply, Image ID " << id << endl;
     UNUSED(id);
@@ -454,7 +482,7 @@ void MeanTransformer::InitFromConfig(const ConfigParameters &config)
     }
 }
 
-void MeanTransformer::Apply(size_t id, cv::Mat &mat)
+void MeanTransformer::Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr)
 {
     cout << "MeanTransformer::Apply, Image ID " << id << endl;
     UNUSED(id);
@@ -500,7 +528,7 @@ void TransposeTransformer::Initialize(TransformerPtr next,
 
 SequenceDataPtr
 TransposeTransformer::Apply(SequenceDataPtr inputSequence,
-                            SequenceDataPtr inputSequenceLabel,
+                            SequenceDataPtr &inputSequenceLabel,
                             const StreamDescription &inputStream,
                             const StreamDescription &outputStream)
 {
@@ -528,7 +556,7 @@ struct DenseSequenceWithBuffer : DenseSequenceData
 
 template <class TElemType>
 SequenceDataPtr TransposeTransformer::TypedApply(SequenceDataPtr sequence,
-                                                 SequenceDataPtr inputSequenceLabel,
+                                                 SequenceDataPtr &inputSequenceLabel,
                                                  const StreamDescription &inputStream,
                                                  const StreamDescription &outputStream)
 {
@@ -607,7 +635,7 @@ void IntensityTransformer::StartEpoch(const EpochConfiguration &config)
     ImageTransformerBase::StartEpoch(config);
 }
 
-void IntensityTransformer::Apply(size_t id, cv::Mat &mat)
+void IntensityTransformer::Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr)
 {
     cout << "IntensityTransformer::Apply, Image ID " << id << endl;
     UNUSED(id);
@@ -690,7 +718,7 @@ void ColorTransformer::StartEpoch(const EpochConfiguration &config)
     ImageTransformerBase::StartEpoch(config);
 }
 
-void ColorTransformer::Apply(size_t id, cv::Mat &mat)
+void ColorTransformer::Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr)
 {
     cout << "ColorTransformer::Apply, Image ID " << id << endl;
     UNUSED(id);
