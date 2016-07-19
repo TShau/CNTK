@@ -67,12 +67,15 @@ ImageConfigHelper::ImageConfigHelper(const ConfigParameters& config)
     m_streams.push_back(features);
 
     ConfigParameters labelSection = config(labelNames[0]);
-    size_t labelDimension = labelSection("labelDim");
-
+    m_labelDimension = labelSection("labelDim");
+    /*
+    intargvector labelLandmarks = labelSection("LabelLandmarks");
+    m_LabelLandmarks = labelLandmarks;
+    */
     auto label = std::make_shared<StreamDescription>();
     label->m_id = 1;
     label->m_name = msra::strfun::utf16(labelSection.ConfigName());
-    label->m_sampleLayout = std::make_shared<TensorShape>(labelDimension);
+    label->m_sampleLayout = std::make_shared<TensorShape>(m_labelDimension);
     label->m_storageType = StorageType::dense;
     m_streams.push_back(label);
     

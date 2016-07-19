@@ -59,6 +59,7 @@ protected:
 
 protected:
     std::unique_ptr<ImageConfigHelper> m_imageConfig;
+    size_t m_labelDimension;
 
 private:
     std::vector<StreamDescriptionPtr> m_outputStreams;
@@ -86,8 +87,8 @@ private:
         UniArea = 3
     };
 
-    void InitFromConfig(const ConfigParameters &config);
-
+    void InitFeaturesFromConfig(const ConfigParameters &config);
+    void InitLabelsFromConfig(const ConfigParameters &config);
     void StartEpoch(const EpochConfiguration &config) override;
 
     RatioJitterType ParseJitterType(const std::string &src);
@@ -100,6 +101,8 @@ private:
     bool m_hFlip;
     doubleargvector m_aspectRatioRadius;
     double m_curAspectRatioRadius;
+    intargvector m_hardCrop;
+    intargvector m_softCrop;
 
 };
 

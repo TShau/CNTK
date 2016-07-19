@@ -110,17 +110,34 @@ void CropTransformer::Initialize(TransformerPtr next,
 {
     ImageTransformerBase::Initialize(next, readerConfig);
     auto featureStreamIds = GetAppliedStreamIds();
-    InitFromConfig(readerConfig(GetInputStreams()[featureStreamIds[0]]->m_name));
+    cout << "Getinputstreams->m_name " << string(GetInputStreams()[featureStreamIds[0]]->m_name.begin(), GetInputStreams()[featureStreamIds[0]]->m_name.end()) << endl;
+    cout << "Getinputstreams->m_name 1 " << string(GetInputStreams()[1]->m_name.begin(), GetInputStreams()[1]->m_name.end()) << endl;
+    /*
+    GetAppliedStreamIds() currently only delivers value 0 for featureStreamIds,
+    which represents only the features but not the labels.
+    For using the labels  GetInputStreams()[1]->m_name can be used.
+    */
+
+    //InitFeaturesFromConfig(readerConfig(GetInputStreams()[featureStreamIds[0]]->m_name));
+    InitFeaturesFromConfig(readerConfig(GetInputStreams()[featureStreamIds[0]]->m_name));
+    InitLabelsFromConfig(readerConfig(GetInputStreams()[1]->m_name));
 }
 
-void CropTransformer::InitFromConfig(const ConfigParameters &config)
+void CropTransformer::InitFeaturesFromConfig(const ConfigParameters &config)
 {
+    /*
+    ImageConfigHelper confhelp(config);
+   
+    intargvector labelLandmarks = confhelp.GetLabelLandmarks();
+    cout << "labelLandmarks " << labelLandmarks[0] << " "<< labelLandmarks.size() << endl;
+
+    size_t labelDim = confhelp.GetLabelDim();
+    */
 
     floatargvector cropRatio = config(L"cropRatio", "1.0");
     m_cropRatioMin = cropRatio[0];
     m_cropRatioMax = cropRatio[1];
-    cout << "Cropratio: "<<m_cropRatioMin << " " <<m_cropRatioMax  << '\n';
-
+    
     if (!(0 < m_cropRatioMin && m_cropRatioMin <= 1.0) ||
         !(0 < m_cropRatioMax && m_cropRatioMax <= 1.0) ||
         m_cropRatioMin > m_cropRatioMax)
@@ -141,6 +158,25 @@ void CropTransformer::InitFromConfig(const ConfigParameters &config)
     }
 
     m_aspectRatioRadius = config(L"aspectRatioRadius", ConfigParameters::Array(doubleargvector(vector<double>{0.0})));
+}
+
+void CropTransformer::InitLabelsFromConfig(const ConfigParameters &config)
+{
+    m_labelDimension = config(L"labelDim");
+
+    if (m_labelDimension<0)
+    {
+        RuntimeError("Invalid labelDim value, must be > 0 ");
+    }
+
+    std::string type = config(L"labelType", "classification");
+    if (AreEqualIgnoreCase(type, "regression"))
+    {
+        intargvector HardCropLabel = config("hardCrop");
+        intargvector SoftCropLabel = config("softCrop");
+        m_hardCrop = HardCropLabel;
+        m_softCrop = SoftCropLabel;
+    }
 }
 
 void CropTransformer::StartEpoch(const EpochConfiguration &config)
