@@ -87,6 +87,13 @@ private:
         UniArea = 3
     };
 
+    enum class LabelFunction
+    {
+        None = 0,
+        Landmark = 1,
+        Visibility = 2,
+    };
+
     void InitFeaturesFromConfig(const ConfigParameters &config);
     void InitLabelsFromConfig(const ConfigParameters &config);
     void StartEpoch(const EpochConfiguration &config) override;
@@ -101,8 +108,8 @@ private:
     bool m_hFlip;
     doubleargvector m_aspectRatioRadius;
     double m_curAspectRatioRadius;
-    intargvector m_hardCrop;
-    intargvector m_softCrop;
+    intargvector m_VisibilityLabels;
+    intargvector m_LandmarkLabels;
 
 };
 

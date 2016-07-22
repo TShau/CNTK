@@ -12,6 +12,7 @@
 #include "ConcStack.h"
 #include "StringUtil.h"
 #include "ElementTypeUtils.h"
+#include <algorithm>
 
 namespace Microsoft { namespace MSR { namespace CNTK
 {
@@ -170,12 +171,49 @@ void CropTransformer::InitLabelsFromConfig(const ConfigParameters &config)
     }
 
     std::string type = config(L"labelType", "classification");
+    
+    /*
+    Parse 
+    */
     if (AreEqualIgnoreCase(type, "regression"))
     {
-        intargvector HardCropLabel = config("hardCrop");
-        intargvector SoftCropLabel = config("softCrop");
-        m_hardCrop = HardCropLabel;
-        m_softCrop = SoftCropLabel;
+        if (config.ExistsCurrent("Landmarks"))
+        {
+            intargvector LandmarkLabels = config("Landmarks");
+            m_LandmarkLabels = LandmarkLabels;
+        }
+        else
+        {
+            intargvector zero = std::string("0:0");
+            m_LandmarkLabels = zero;
+        }
+        
+        if (config.ExistsCurrent("Visibilities"))
+        {
+            intargvector VisibilityLabels = config("Visibilities");
+            m_VisibilityLabels = VisibilityLabels;
+        }
+        else
+        {
+            intargvector zero = std::string("0:0");
+            m_VisibilityLabels = zero;
+        }
+
+        if ((m_LandmarkLabels.back() - m_LandmarkLabels.front()) < (m_VisibilityLabels.back() - m_VisibilityLabels.front()) * 2)
+        {
+            RuntimeError("Invalid values for ""Landmarks"" and ""Visibilities"". There are more Visibility points than Landmarks ");
+        }
+
+        if ((m_LandmarkLabels.back()-m_LandmarkLabels.front()+1) % 2 != 0)
+        {
+            RuntimeError("Invalid values for ""Landmarks"". Value range must be an even number, since Landmarks represent 2D Coordinates");
+        }
+
+        if(((m_LandmarkLabels.back() - m_LandmarkLabels.front()) < 0) || 
+           ((m_VisibilityLabels.back() - m_VisibilityLabels.front()) < 0))
+        {
+            RuntimeError("Invalid values at Labels. Notation ""Landmarks"" and ""Visibilities"" must be ranged values. E.g. 1:5.");
+        }
     }
 }
 
@@ -221,34 +259,51 @@ void CropTransformer::Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr)
 
     int viewIndex = m_imageConfig->IsMultiViewCrop() ? (int)(id % 10) : 0;
 
-    // Apply Crop Change to Regression Label
-    // TODO: Feed Label from Config and allign them in x,y
-    // TODO: Check if Label is Regression or Classification or something else
     // TODO: Cut out Label if it gets value outside [0,1]
-    // TODO : Get Amount of Label Koordinates
-    // TODO : Some identification if Label is Koordinate
-
 
 
     cv::Rect cropRect = GetCropRect(m_imageConfig->GetCropType(), viewIndex, mat.rows, mat.cols, ratio, *rng);
     
-    // Input variables for handling cropping on Label
-    
-    int labelSize = 4;
+
+
 
     if (m_imageConfig->GetElementType() == ElementType::tfloat)
     {
         float *dat = reinterpret_cast<float*>(labelPtr->m_data);
-        for (int it_label = 0; it_label < labelSize; it_label = it_label += 2)
+        for (int it_label = 0; it_label < m_labelDimension; it_label = it_label += 2)
         {
+
+            /*
+            From Config file, check if selected Label ist soft or hard cropped.
+            Landmark labels are regarded as 2D-coordinates (f.e. Landmarks), and will be transformed during Crop-Transformation.
+            Also the index of the For Loop should therefore incremented with 2
+            Visibility labels are regarded as values and between 0 and 1 and correspont to the Landmarks in sequence.
+            If after cropping a Landmark is cut out, the correspondin Visibility label value turns zero
+            
+            */
+            
+            LabelFunction CropMode = LabelFunction::None;
+
+            // Note: Assumption that m_LandmarkLabels and m_VisibilityLabels are vectors with 2 elements
+            if ((unsigned)(it_label - m_LandmarkLabels.front()) < (m_LandmarkLabels.back() - m_LandmarkLabels.front()))
+            {
+                cout << "CropType: Landmark" << endl;
+                CropMode = LabelFunction::Landmark;
+            }
+            else if ((unsigned)(it_label - m_VisibilityLabels.front()) < (m_VisibilityLabels.back() - m_VisibilityLabels.front()))
+            {
+                cout << "CropType: Visibility" << endl;
+                CropMode = LabelFunction::Visibility;
+            }
+
             float *label_x = &dat[it_label];
             float *label_y = &dat[it_label + 1];
             cout << "Label Coordinate at" << it_label << " : " << *label_x << " " << *label_y << endl;
             switch (m_imageConfig->GetLabelType())
             {
             case LabelType::Regression:
-                *label_x = (*label_x - ((float)cropRect.x / (float)mat.cols)) / ratio;
-                *label_y = (*label_y - ((float)cropRect.y / (float)mat.rows)) / ratio;
+                *label_x = (*label_x - (cropRect.x / mat.cols)) / ratio;
+                *label_y = (*label_y - (cropRect.y / mat.rows)) / ratio;
                 cout << "Cropped  Coordinate  : " << *label_x << " " << *label_y << endl;
                 break;
             case LabelType::Classification:
@@ -261,7 +316,7 @@ void CropTransformer::Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr)
     else if (m_imageConfig->GetElementType() == ElementType::tdouble)
     {
         double *dat = reinterpret_cast<double*>(labelPtr->m_data);
-        for (int it_label = 0; it_label < labelSize; it_label = it_label += 2)
+        for (int it_label = 0; it_label < m_labelDimension; it_label = it_label += 2)
         {
             double *label_x = &dat[it_label];
             double *label_y = &dat[it_label + 1];
@@ -269,8 +324,8 @@ void CropTransformer::Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr)
             switch (m_imageConfig->GetLabelType())
             {
             case LabelType::Regression:
-                *label_x = (*label_x - ((double)cropRect.x / (double)mat.cols)) / ratio;
-                *label_y = (*label_y - ((double)cropRect.y / (double)mat.rows)) / ratio;
+                *label_x = (*label_x - (cropRect.x / mat.cols)) / ratio;
+                *label_y = (*label_y - (cropRect.y / mat.rows)) / ratio;
                 cout << "Cropped  Coordinate  : " << *label_x << " " << *label_y << endl;
                 break;
             case LabelType::Classification:
