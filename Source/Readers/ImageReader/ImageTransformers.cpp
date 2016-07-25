@@ -231,7 +231,6 @@ void CropTransformer::StartEpoch(const EpochConfiguration &config)
 
 void CropTransformer::Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr)
 {
-    
     cout << "CropTransformer::Apply, Image ID " << id <<endl ;
     auto seed = GetSeed();
     auto rng = m_rngs.pop_or_create([seed]() { return std::make_unique<std::mt19937>(seed); });
