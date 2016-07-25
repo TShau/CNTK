@@ -44,11 +44,31 @@ public:
     virtual void /*ComputationNodeNonLooping::*/ ForwardPropNonLooping() override
     {
         FrameRange fr(Input(0)->GetMBLayout());
+
+		auto labeled = Input(0)->ValueFor(fr).DeepClone();
+
+		// find unlabeled data
+		labeled.InplaceTruncateTop(ElemType(-2));
+		labeled += ElemType(3);
+		labeled.InplaceTruncateBottom(ElemType(0));
+		const ElemType num_labeled = labeled.MatrixNorm0();
+		const ElemType max_labeled = static_cast<ElemType>(labeled.GetNumElements());
+
+		// assert that labeled only contains zeros and ones
+		assert(labeled.SumOfElements() == num_labeled);
+
         m_leftMinusRight->AssignDifferenceOf(Input(0)->ValueFor(fr), Input(1)->ValueFor(fr));
+
+		// ignore unlabeled data while computing the loss (and, more importantly, the gradient)
+		m_leftMinusRight->ElementMultiplyWith(labeled);
+
         MaskMissingColumnsToZero(*m_leftMinusRight, Input(0)->GetMBLayout(), fr); // we are fine since it will only be called with full minibatch.
         ElemType v = m_leftMinusRight->FrobeniusNorm(); // v = sqrt( sum{ (I0[i] - I1[i])^2 } )
         Value().VerifySize(1, 1);
-        Value().SetValue(v * v);  // Value = sum{ (I0[i] - I1[i])^2 }
+
+		// scale the loss so that 
+		const ElemType scale = max_labeled / num_labeled;
+		Value().SetValue(v * v * scale);  // Value = sum{ (I0[i] - I1[i])^2 }
 #if NANCHECK
         Value().HasNan("SquareError");
 #endif
