@@ -173,47 +173,112 @@ void CropTransformer::InitLabelsFromConfig(const ConfigParameters &config)
     std::string type = config(L"labelType", "classification");
     
     /*
-    Parse 
+    Parse parameters if labelType="regression".
+    One way of using regression labels is learning landmarks. 
+    For Landmarks, parameters like position and visibility are supported. 
+    For Visibility it is assumed that the first label corresponds to the first position label, and so on.
+    
     */
     if (AreEqualIgnoreCase(type, "regression"))
     {
         if (config.ExistsCurrent("Landmarks"))
         {
-            intargvector LandmarkLabels = config("Landmarks");
+            ConfigParameters LandmarkParameters = config("Landmarks");
+            
+            intargvector LandmarkLabels = LandmarkParameters(L"position_indices", ConfigParameters::Array(intargvector(vector<int>(2,0))));
             m_LandmarkLabels = LandmarkLabels;
-        }
-        else
-        {
-            intargvector zero = std::string("0:0");
-            m_LandmarkLabels = zero;
-        }
-        
-        if (config.ExistsCurrent("Visibilities"))
-        {
-            intargvector VisibilityLabels = config("Visibilities");
+            cout << "landmarks " << m_LandmarkLabels.front() << " : " << m_LandmarkLabels.back() << endl;
+                      
+            intargvector VisibilityLabels = LandmarkParameters(L"visibility_indices", ConfigParameters::Array(intargvector(vector<int>(2, 0))));
             m_VisibilityLabels = VisibilityLabels;
-        }
-        else
-        {
-            intargvector zero = std::string("0:0");
-            m_VisibilityLabels = zero;
+            cout << "visibilities " << m_VisibilityLabels.front() << " : " << m_VisibilityLabels.back() << endl;
+            
+            std::string relTransformation = LandmarkParameters(L"relative_transformation", "true");
+            m_relativeCropping = AreEqualIgnoreCase(relTransformation, "true") ? true : false;
+            cout << "relative Crop : " << relTransformation << endl;
+
+            std::string cropLandmark = LandmarkParameters(L"crop_landmark", "soft");
+            if (AreEqualIgnoreCase(cropLandmark, "soft"))
+            {
+                m_cropLandmark = CropModeLandmark::soft;
+                cout << "crop_lm = soft" << endl;
+            }
+            else if (AreEqualIgnoreCase(cropLandmark, "hard"))
+            {
+                m_cropLandmark = CropModeLandmark::hard;
+                cout << "crop_lm = hard" << endl;
+            }
+            else if (AreEqualIgnoreCase(cropLandmark, "both"))
+            {
+                m_cropLandmark = CropModeLandmark::both;
+                cout << "crop_lm = both" << endl;
+            }
+            else if (AreEqualIgnoreCase(cropLandmark, "none"))
+            {
+                m_cropLandmark = CropModeLandmark::none;
+                cout << "crop_lm = none" << endl;
+            }
+            else
+            {
+                RuntimeError("Invalid value for crop_landmark. Parameter must be either soft/hard/both/none");
+            }
+
+            std::string cropVisibility = LandmarkParameters(L"crop_visibility", "hard");
+            if (AreEqualIgnoreCase(cropVisibility, "soft"))
+            {
+                m_cropVisibility = CropModeVisibility::soft;
+                cout << "crop_vis = soft" << endl;
+            }
+            else if (AreEqualIgnoreCase(cropVisibility, "hard"))
+            {
+                m_cropVisibility = CropModeVisibility::hard;
+                cout << "crop_vis = hard" << endl;
+            }
+            else if (AreEqualIgnoreCase(cropVisibility, "both"))
+            {
+                m_cropVisibility = CropModeVisibility::both;
+                cout << "crop_vis = both" << endl;
+            }
+            else if (AreEqualIgnoreCase(cropVisibility, "none"))
+            {
+                m_cropVisibility = CropModeVisibility::none;
+                cout << "crop_vis = none" << endl;
+            }
+            else
+            {
+                RuntimeError("Invalid value for crop_visibility. Parameter must be either soft/hard/both/none");
+            }
+            
+            m_LandmarkValueMin = LandmarkParameters(L"min_value", 0.0);
+            cout << "landmark_min " << m_LandmarkValueMin << endl;
+
+            m_LandmarkValueMax = LandmarkParameters(L"max_value", 2.0);
+            cout << "landmark_max " << m_LandmarkValueMax << endl;
+
+            //Check if parameter in configfile are correct
+            if ((m_LandmarkLabels.back() - m_LandmarkLabels.front() + 1) <= (m_VisibilityLabels.back() - m_VisibilityLabels.front() + 1) * 2)
+            {
+                RuntimeError("Invalid values for ""Landmarks"" and ""Visibilities"". There are more Visibility points than Landmarks ");
+            }
+
+            if ((m_LandmarkLabels.back() - m_LandmarkLabels.front() + 1) % 2 != 0)
+            {
+                RuntimeError("Invalid values for ""Landmarks"". Value range must be an even number, since Landmarks represent 2D Coordinates");
+            }
+
+            if ((m_LandmarkLabels.front() > m_LandmarkLabels.back()) ||
+                (m_VisibilityLabels.front() > m_VisibilityLabels.back()) ||
+                (m_LandmarkLabels.front() < 0) || (m_LandmarkLabels.back() < 0) ||
+                (m_VisibilityLabels.front() < 0) || (m_VisibilityLabels.back() < 0))
+            {
+                RuntimeError("Invalid values at Labels. Notation ""Landmarks"" and ""Visibilities"" must be ranged values. E.g. 1:5.");
+            }
+
+
+            //TODO: What happens if some parameters are omitted , like position and visibility indices
         }
 
-        if ((m_LandmarkLabels.back() - m_LandmarkLabels.front()) < (m_VisibilityLabels.back() - m_VisibilityLabels.front()) * 2)
-        {
-            RuntimeError("Invalid values for ""Landmarks"" and ""Visibilities"". There are more Visibility points than Landmarks ");
-        }
-
-        if ((m_LandmarkLabels.back()-m_LandmarkLabels.front()+1) % 2 != 0)
-        {
-            RuntimeError("Invalid values for ""Landmarks"". Value range must be an even number, since Landmarks represent 2D Coordinates");
-        }
-
-        if(((m_LandmarkLabels.back() - m_LandmarkLabels.front()) < 0) || 
-           ((m_VisibilityLabels.back() - m_VisibilityLabels.front()) < 0))
-        {
-            RuntimeError("Invalid values at Labels. Notation ""Landmarks"" and ""Visibilities"" must be ranged values. E.g. 1:5.");
-        }
+        
     }
 }
 
@@ -277,10 +342,10 @@ void CropTransformer::Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr)
             Landmark labels are regarded as 2D-coordinates (f.e. Landmarks), and will be transformed during Crop-Transformation.
             Also the index of the For Loop should therefore incremented with 2
             Visibility labels are regarded as values and between 0 and 1 and correspont to the Landmarks in sequence.
-            If after cropping a Landmark is cut out, the correspondin Visibility label value turns zero
-            
+            If after cropping a Landmark is cut out, the correspondin Visibility label value turns zero         
             */
-            
+
+            /*
             LabelFunction CropMode = LabelFunction::None;
 
             // Note: Assumption that m_LandmarkLabels and m_VisibilityLabels are vectors with 2 elements
@@ -294,6 +359,7 @@ void CropTransformer::Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr)
                 cout << "CropType: Visibility" << endl;
                 CropMode = LabelFunction::Visibility;
             }
+            */
 
             float *label_x = &dat[it_label];
             float *label_y = &dat[it_label + 1];

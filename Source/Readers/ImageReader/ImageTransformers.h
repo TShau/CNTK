@@ -87,11 +87,20 @@ private:
         UniArea = 3
     };
 
-    enum class LabelFunction
+    enum class CropModeLandmark
     {
-        None = 0,
-        Landmark = 1,
-        Visibility = 2,
+        soft = 0,
+        hard = 1,
+        both = 2, 
+        none = 3
+    };
+
+    enum class CropModeVisibility
+    {
+        soft = 0,
+        hard = 1,
+        both = 2, 
+        none = 3
     };
 
     void InitFeaturesFromConfig(const ConfigParameters &config);
@@ -104,13 +113,19 @@ private:
     conc_stack<std::unique_ptr<std::mt19937>> m_rngs;
     double m_cropRatioMin;
     double m_cropRatioMax;
+    
     RatioJitterType m_jitterType;
     bool m_hFlip;
     doubleargvector m_aspectRatioRadius;
     double m_curAspectRatioRadius;
     intargvector m_VisibilityLabels;
     intargvector m_LandmarkLabels;
+    double m_LandmarkValueMin;
+    double m_LandmarkValueMax;
+    bool m_relativeCropping;
 
+    CropModeLandmark m_cropLandmark;
+    CropModeVisibility m_cropVisibility;
 };
 
 // Scale transformation of the image.
