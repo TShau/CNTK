@@ -111,8 +111,10 @@ void CropTransformer::Initialize(TransformerPtr next,
 {
     ImageTransformerBase::Initialize(next, readerConfig);
     auto featureStreamIds = GetAppliedStreamIds();
-    cout << "Getinputstreams->m_name " << string(GetInputStreams()[featureStreamIds[0]]->m_name.begin(), GetInputStreams()[featureStreamIds[0]]->m_name.end()) << endl;
-    cout << "Getinputstreams->m_name 1 " << string(GetInputStreams()[1]->m_name.begin(), GetInputStreams()[1]->m_name.end()) << endl;
+    int labelStreamIds = 1;
+    cout << "Getinputstreams[0] " << string(GetInputStreams()[featureStreamIds[0]]->m_name.begin(), GetInputStreams()[featureStreamIds[0]]->m_name.end()) << endl;
+    cout << "Getinputstreams[1] " << string(GetInputStreams()[labelStreamIds]->m_name.begin(), GetInputStreams()[labelStreamIds]->m_name.end()) << endl;
+
     /*
     GetAppliedStreamIds() currently only delivers value 0 for featureStreamIds,
     which represents only the features but not the labels.
@@ -121,7 +123,7 @@ void CropTransformer::Initialize(TransformerPtr next,
 
     //InitFeaturesFromConfig(readerConfig(GetInputStreams()[featureStreamIds[0]]->m_name));
     InitFeaturesFromConfig(readerConfig(GetInputStreams()[featureStreamIds[0]]->m_name));
-    InitLabelsFromConfig(readerConfig(GetInputStreams()[1]->m_name));
+    InitLabelsFromConfig(readerConfig(GetInputStreams()[labelStreamIds]->m_name));
 }
 
 void CropTransformer::InitFeaturesFromConfig(const ConfigParameters &config)
@@ -256,7 +258,12 @@ void CropTransformer::InitLabelsFromConfig(const ConfigParameters &config)
             cout << "landmark_max " << m_LandmarkValueMax << endl;
 
             //Check if parameter in configfile are correct
-            if ((m_LandmarkLabels.back() - m_LandmarkLabels.front() + 1) <= (m_VisibilityLabels.back() - m_VisibilityLabels.front() + 1) * 2)
+            if ((m_LandmarkLabels.back() == 0) && (m_LandmarkLabels.front() == 0))
+            {
+                RuntimeError("No Landmark-Labels specified in Section Landmarks");
+            }
+
+            if ((m_LandmarkLabels.back() - m_LandmarkLabels.front() + 1) < ((m_VisibilityLabels.back() - m_VisibilityLabels.front() + 1) * 2))
             {
                 RuntimeError("Invalid values for ""Landmarks"" and ""Visibilities"". There are more Visibility points than Landmarks ");
             }
@@ -327,16 +334,16 @@ void CropTransformer::Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr)
 
 
     cv::Rect cropRect = GetCropRect(m_imageConfig->GetCropType(), viewIndex, mat.rows, mat.cols, ratio, *rng);
-    
+    mat = mat(cropRect);
 
-
-
+    // LANDMARK CROPPING
     if (m_imageConfig->GetElementType() == ElementType::tfloat)
     {
         float *dat = reinterpret_cast<float*>(labelPtr->m_data);
+
+        //Crop Landmarks
         for (int it_label = 0; it_label < m_labelDimension; it_label = it_label += 2)
         {
-
             /*
             From Config file, check if selected Label ist soft or hard cropped.
             Landmark labels are regarded as 2D-coordinates (f.e. Landmarks), and will be transformed during Crop-Transformation.
@@ -361,46 +368,84 @@ void CropTransformer::Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr)
             }
             */
 
+            if (m_cropLandmark == CropModeLandmark::none)
+            {
+                break;
+            }
+
+            // Check if current label is a Landmark
+            if ((it_label + 1 < m_LandmarkLabels[0]) || (it_label + 1 >> m_LandmarkLabels[1]))
+            {
+                continue;
+            }
+
+            // Set scaling factor for relative Cropping
+            std::vector<float> factor_rel_transform;
+            if (m_relativeCropping){
+                factor_rel_transform.push_back(cropRect.width);
+                factor_rel_transform.push_back(cropRect.height);
+            }
+            else {
+                factor_rel_transform = vector<float>(2, 1);
+            }
+
             float *label_x = &dat[it_label];
             float *label_y = &dat[it_label + 1];
+            float test_x = *label_x;
+            float test_y = *label_y;
             cout << "Label Coordinate at" << it_label << " : " << *label_x << " " << *label_y << endl;
             switch (m_imageConfig->GetLabelType())
             {
             case LabelType::Regression:
-                *label_x = (*label_x - (cropRect.x / mat.cols)) / ratio;
-                *label_y = (*label_y - (cropRect.y / mat.rows)) / ratio;
+                
+                test_x = (test_x * (float)mat.cols - cropRect.x) / factor_rel_transform.at(0);
+                test_y = (test_y * (float)mat.rows - cropRect.y) / factor_rel_transform.at(1);
+                cout << "Cropped  TEST Coordinate  : " << test_x << " " << test_y << endl;
+
+                *label_x = (*label_x - ((float)cropRect.x / mat.cols)) / ratio;
+                *label_y = (*label_y - ((float)cropRect.y / mat.rows)) / ratio;
                 cout << "Cropped  Coordinate  : " << *label_x << " " << *label_y << endl;
+
+                // Set label to 0.0 or NaN, if cropped outside 
+                if ((m_cropLandmark == CropModeLandmark::hard) || (m_cropLandmark == CropModeLandmark::both))
+                {
+                    if ((*label_x < m_LandmarkValueMin) || (*label_x > m_LandmarkValueMax) ||
+                        (*label_y < m_LandmarkValueMin) || (*label_y > m_LandmarkValueMax))
+                    {
+                        *label_x = 0.0;
+                        *label_y = 0.0;
+                    }
+                }
+
                 break;
             case LabelType::Classification:
                 break;
             default:
                 ;
+            }
+        }
+
+        // Crop Visibilities
+        for (int it_label = 0; it_label < m_labelDimension; it_label ++)
+        {
+            if (m_cropVisibility == CropModeVisibility::none)
+            {
+                break;
+            }
+
+            // Check if current label is a Landmark
+            if ((it_label + 1 < m_VisibilityLabels[0]) || (it_label + 1 >> m_VisibilityLabels[1]))
+            {
+                continue;
             }
         }
     }
     else if (m_imageConfig->GetElementType() == ElementType::tdouble)
     {
-        double *dat = reinterpret_cast<double*>(labelPtr->m_data);
-        for (int it_label = 0; it_label < m_labelDimension; it_label = it_label += 2)
-        {
-            double *label_x = &dat[it_label];
-            double *label_y = &dat[it_label + 1];
-            cout << "Label Coordinate at" << it_label << " : " << *label_x << " " << *label_y << endl;
-            switch (m_imageConfig->GetLabelType())
-            {
-            case LabelType::Regression:
-                *label_x = (*label_x - (cropRect.x / mat.cols)) / ratio;
-                *label_y = (*label_y - (cropRect.y / mat.rows)) / ratio;
-                cout << "Cropped  Coordinate  : " << *label_x << " " << *label_y << endl;
-                break;
-            case LabelType::Classification:
-                break;
-            default:
-                ;
-            }
-        }
+        // Change it to a template function
     }
-    mat = mat(cropRect);
+
+
 
 
     if ((m_hFlip && std::bernoulli_distribution()(*rng)) ||

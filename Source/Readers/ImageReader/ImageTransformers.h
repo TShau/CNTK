@@ -117,9 +117,9 @@ private:
     RatioJitterType m_jitterType;
     bool m_hFlip;
     doubleargvector m_aspectRatioRadius;
-    double m_curAspectRatioRadius;
-    intargvector m_VisibilityLabels;
+    double m_curAspectRatioRadius;  
     intargvector m_LandmarkLabels;
+    intargvector m_VisibilityLabels;
     double m_LandmarkValueMin;
     double m_LandmarkValueMax;
     bool m_relativeCropping;
