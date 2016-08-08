@@ -111,15 +111,16 @@ void CropTransformer::Initialize(TransformerPtr next,
 {
     ImageTransformerBase::Initialize(next, readerConfig);
     auto featureStreamIds = GetAppliedStreamIds();
-    int labelStreamIds = 1;
-    cout << "Getinputstreams[0] " << string(GetInputStreams()[featureStreamIds[0]]->m_name.begin(), GetInputStreams()[featureStreamIds[0]]->m_name.end()) << endl;
-    cout << "Getinputstreams[1] " << string(GetInputStreams()[labelStreamIds]->m_name.begin(), GetInputStreams()[labelStreamIds]->m_name.end()) << endl;
 
     /*
     GetAppliedStreamIds() currently only delivers value 0 for featureStreamIds,
     which represents only the features but not the labels.
     For using the labels  GetInputStreams()[1]->m_name can be used.
     */
+    
+    int labelStreamIds = 1;
+    cout << "Getinputstreams[0] " << string(GetInputStreams()[featureStreamIds[0]]->m_name.begin(), GetInputStreams()[featureStreamIds[0]]->m_name.end()) << endl;
+    cout << "Getinputstreams[1] " << string(GetInputStreams()[labelStreamIds]->m_name.begin(), GetInputStreams()[labelStreamIds]->m_name.end()) << endl;
 
     //InitFeaturesFromConfig(readerConfig(GetInputStreams()[featureStreamIds[0]]->m_name));
     InitFeaturesFromConfig(readerConfig(GetInputStreams()[featureStreamIds[0]]->m_name));
@@ -281,8 +282,12 @@ void CropTransformer::InitLabelsFromConfig(const ConfigParameters &config)
                 RuntimeError("Invalid values at Labels. Notation ""Landmarks"" and ""Visibilities"" must be ranged values. E.g. 1:5.");
             }
 
+            if ((m_LandmarkLabels.back() > m_labelDimension) || (m_VisibilityLabels.back() > m_labelDimension))
+            {
+                RuntimeError("Invalid values at Labels. Indices must not exceed labelDim.");
+            }
 
-            //TODO: What happens if some parameters are omitted , like position and visibility indices
+            
         }
 
         
@@ -334,9 +339,8 @@ void CropTransformer::Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr)
 
 
     cv::Rect cropRect = GetCropRect(m_imageConfig->GetCropType(), viewIndex, mat.rows, mat.cols, ratio, *rng);
-    mat = mat(cropRect);
 
-    // LANDMARK CROPPING
+    // CROPPING
     if (m_imageConfig->GetElementType() == ElementType::tfloat)
     {
         float *dat = reinterpret_cast<float*>(labelPtr->m_data);
@@ -374,18 +378,22 @@ void CropTransformer::Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr)
             }
 
             // Check if current label is a Landmark
-            if ((it_label + 1 < m_LandmarkLabels[0]) || (it_label + 1 >> m_LandmarkLabels[1]))
+            if ((it_label + 1 < m_LandmarkLabels[0]) || (it_label + 1 > m_LandmarkLabels[1]))
             {
                 continue;
             }
 
+            cout << "Landmark Loop: It_label: " << it_label << endl;
+
             // Set scaling factor for relative Cropping
             std::vector<float> factor_rel_transform;
-            if (m_relativeCropping){
+            if (m_relativeCropping)
+            {
                 factor_rel_transform.push_back(cropRect.width);
                 factor_rel_transform.push_back(cropRect.height);
             }
-            else {
+            else 
+            {
                 factor_rel_transform = vector<float>(2, 1);
             }
 
@@ -397,13 +405,9 @@ void CropTransformer::Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr)
             switch (m_imageConfig->GetLabelType())
             {
             case LabelType::Regression:
-                
-                test_x = (test_x * (float)mat.cols - cropRect.x) / factor_rel_transform.at(0);
-                test_y = (test_y * (float)mat.rows - cropRect.y) / factor_rel_transform.at(1);
-                cout << "Cropped  TEST Coordinate  : " << test_x << " " << test_y << endl;
 
-                *label_x = (*label_x - ((float)cropRect.x / mat.cols)) / ratio;
-                *label_y = (*label_y - ((float)cropRect.y / mat.rows)) / ratio;
+                *label_x = (*label_x * (float)mat.cols - (float)cropRect.x) / factor_rel_transform.at(0);
+                *label_y = (*label_y * (float)mat.rows - (float)cropRect.y) / factor_rel_transform.at(1);
                 cout << "Cropped  Coordinate  : " << *label_x << " " << *label_y << endl;
 
                 // Set label to 0.0 or NaN, if cropped outside 
@@ -438,6 +442,10 @@ void CropTransformer::Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr)
             {
                 continue;
             }
+
+            cout << "Visibility Loop: It_label: " << it_label << endl;
+
+
         }
     }
     else if (m_imageConfig->GetElementType() == ElementType::tdouble)
@@ -446,6 +454,8 @@ void CropTransformer::Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr)
     }
 
 
+
+    mat = mat(cropRect);
 
 
     if ((m_hFlip && std::bernoulli_distribution()(*rng)) ||
@@ -570,6 +580,7 @@ cv::Rect CropTransformer::GetCropRect(CropType type, int viewIndex, int crow, in
     default:
         assert(false);
     }
+    cout << endl;
     cout << "Rect " << xOff << " " << yOff << " " << cropSizeX << " " << cropSizeY << " CropRatio " << cropRatio << endl;
 
     assert(0 <= xOff && xOff <= ccol - cropSizeX);
