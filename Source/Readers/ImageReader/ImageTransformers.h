@@ -77,7 +77,7 @@ public:
 
 private:
     void Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr) override;
-
+    template <class T> void RegressionTransform(T dummy, cv::Mat &mat, cv::Rect cropRect, SequenceDataPtr labelPtr);
 private:
     enum class RatioJitterType
     {
