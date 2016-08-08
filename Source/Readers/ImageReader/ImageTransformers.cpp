@@ -340,119 +340,140 @@ void CropTransformer::Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr)
 
     cv::Rect cropRect = GetCropRect(m_imageConfig->GetCropType(), viewIndex, mat.rows, mat.cols, ratio, *rng);
 
-    // CROPPING
-    if (m_imageConfig->GetElementType() == ElementType::tfloat)
+    // CROPPING REGRESSION LABELS
+    // First do the crop transformation for the Regression-Labels, then crop the Image
+    if (m_imageConfig->GetLabelType() == LabelType::Regression)
     {
-        float *dat = reinterpret_cast<float*>(labelPtr->m_data);
-
-        //Crop Landmarks
-        for (int it_label = 0; it_label < m_labelDimension; it_label = it_label += 2)
+        
+        if (m_imageConfig->GetElementType() == ElementType::tfloat)
         {
-            /*
-            From Config file, check if selected Label ist soft or hard cropped.
-            Landmark labels are regarded as 2D-coordinates (f.e. Landmarks), and will be transformed during Crop-Transformation.
-            Also the index of the For Loop should therefore incremented with 2
-            Visibility labels are regarded as values and between 0 and 1 and correspont to the Landmarks in sequence.
-            If after cropping a Landmark is cut out, the correspondin Visibility label value turns zero         
-            */
+            float *dat = reinterpret_cast<float*>(labelPtr->m_data);
+            std::map<int, bool> visibility_map;
 
-            /*
-            LabelFunction CropMode = LabelFunction::None;
-
-            // Note: Assumption that m_LandmarkLabels and m_VisibilityLabels are vectors with 2 elements
-            if ((unsigned)(it_label - m_LandmarkLabels.front()) < (m_LandmarkLabels.back() - m_LandmarkLabels.front()))
+            //Crop Landmarks
+            for (int it_label = 0; it_label < m_labelDimension; it_label = it_label += 2)
             {
+                /*
+                From Config file, check if selected Label ist soft or hard cropped.
+                Landmark labels are regarded as 2D-coordinates (f.e. Landmarks), and will be transformed during Crop-Transformation.
+                Also the index of the For Loop should therefore incremented with 2
+                Visibility labels are regarded as values and between 0 and 1 and correspont to the Landmarks in sequence.
+                If after cropping a Landmark is cut out, the correspondin Visibility label value turns zero
+                */
+
+                /*
+                LabelFunction CropMode = LabelFunction::None;
+
+                // Note: Assumption that m_LandmarkLabels and m_VisibilityLabels are vectors with 2 elements
+                if ((unsigned)(it_label - m_LandmarkLabels.front()) < (m_LandmarkLabels.back() - m_LandmarkLabels.front()))
+                {
                 cout << "CropType: Landmark" << endl;
                 CropMode = LabelFunction::Landmark;
-            }
-            else if ((unsigned)(it_label - m_VisibilityLabels.front()) < (m_VisibilityLabels.back() - m_VisibilityLabels.front()))
-            {
+                }
+                else if ((unsigned)(it_label - m_VisibilityLabels.front()) < (m_VisibilityLabels.back() - m_VisibilityLabels.front()))
+                {
                 cout << "CropType: Visibility" << endl;
                 CropMode = LabelFunction::Visibility;
-            }
-            */
+                }
+                */
 
-            if (m_cropLandmark == CropModeLandmark::none)
-            {
-                break;
-            }
+                if (m_cropLandmark == CropModeLandmark::none)
+                {
+                    break;
+                }
 
-            // Check if current label is a Landmark
-            if ((it_label + 1 < m_LandmarkLabels[0]) || (it_label + 1 > m_LandmarkLabels[1]))
-            {
-                continue;
-            }
+                // Check if current label is a Landmark
+                if ((it_label + 1 < m_LandmarkLabels[0]) || (it_label + 1 > m_LandmarkLabels[1]))
+                {
+                    continue;
+                }
 
-            cout << "Landmark Loop: It_label: " << it_label << endl;
+                cout << "Landmark Loop: It_label: " << it_label << endl;
+                // Set scaling factor for relative Cropping
+                std::vector<float> factor_rel_transform;
+                if (m_relativeCropping)
+                {
+                    factor_rel_transform.push_back(cropRect.width);
+                    factor_rel_transform.push_back(cropRect.height);
+                }
+                else
+                {
+                    factor_rel_transform = vector<float>(2, 1);
+                }
 
-            // Set scaling factor for relative Cropping
-            std::vector<float> factor_rel_transform;
-            if (m_relativeCropping)
-            {
-                factor_rel_transform.push_back(cropRect.width);
-                factor_rel_transform.push_back(cropRect.height);
-            }
-            else 
-            {
-                factor_rel_transform = vector<float>(2, 1);
-            }
-
-            float *label_x = &dat[it_label];
-            float *label_y = &dat[it_label + 1];
-            float test_x = *label_x;
-            float test_y = *label_y;
-            cout << "Label Coordinate at" << it_label << " : " << *label_x << " " << *label_y << endl;
-            switch (m_imageConfig->GetLabelType())
-            {
-            case LabelType::Regression:
+                float *label_x = &dat[it_label];
+                float *label_y = &dat[it_label + 1];
+                float test_x = *label_x;
+                float test_y = *label_y;
+                cout << "Label Coordinate ID " << ((it_label + 1) / 2) << " : " << *label_x << " " << *label_y << endl;
 
                 *label_x = (*label_x * (float)mat.cols - (float)cropRect.x) / factor_rel_transform.at(0);
                 *label_y = (*label_y * (float)mat.rows - (float)cropRect.y) / factor_rel_transform.at(1);
                 cout << "Cropped  Coordinate  : " << *label_x << " " << *label_y << endl;
 
                 // Set label to 0.0 or NaN, if cropped outside 
-                if ((m_cropLandmark == CropModeLandmark::hard) || (m_cropLandmark == CropModeLandmark::both))
+                // Set visibility label to 0 if cropped outside, by specifying on visibility_map
+
+                if ((*label_x < m_LandmarkValueMin) || (*label_x > m_LandmarkValueMax) ||
+                    (*label_y < m_LandmarkValueMin) || (*label_y > m_LandmarkValueMax))
                 {
-                    if ((*label_x < m_LandmarkValueMin) || (*label_x > m_LandmarkValueMax) ||
-                        (*label_y < m_LandmarkValueMin) || (*label_y > m_LandmarkValueMax))
+                    visibility_map.insert(std::pair<int, bool>(((it_label + 1) / 2), false));
+                    if ((m_cropLandmark == CropModeLandmark::hard) || (m_cropLandmark == CropModeLandmark::both))
                     {
                         *label_x = 0.0;
                         *label_y = 0.0;
                     }
+                    //NOTE: What todo iw m_cropLandmark == CropModeLandmark::both ???
+                }
+                else
+                {
+                    visibility_map.insert(std::pair<int, bool>(((it_label + 1) / 2), true));
                 }
 
-                break;
-            case LabelType::Classification:
-                break;
-            default:
-                ;
             }
-        }
 
-        // Crop Visibilities
-        for (int it_label = 0; it_label < m_labelDimension; it_label ++)
+            // Crop Visibilities
+            int it_visibility = 0;
+            for (int it_label = 0; it_label < m_labelDimension; it_label++)
+            {
+                if (m_cropVisibility == CropModeVisibility::none)
+                {
+                    break;
+                }
+
+                // Loop through all Labels to check, if current label is a Visibility
+                if ((it_label + 1 < m_VisibilityLabels[0]) || (it_label + 1 >> m_VisibilityLabels[1]))
+                {
+                    continue;
+                }
+
+                cout << "Visibility Loop: It_label: " << it_label << endl;
+                float *label = &dat[it_label];
+
+                // Check if to it_visibility corresponding Landmark is cropped out 
+                if (m_cropVisibility == CropModeVisibility::hard)
+                {
+                    if (visibility_map.find(it_visibility)->second)
+                    {
+                        *label *= 1;
+                    }
+                    else
+                    {
+                        *label *= 0;
+                    }
+                }
+
+                //NOTE: What should be done if CropModeVisibility::SOFT or BOTH. Does this even make sense.
+                it_visibility++;
+            }
+
+        }
+        else if (m_imageConfig->GetElementType() == ElementType::tdouble)
         {
-            if (m_cropVisibility == CropModeVisibility::none)
-            {
-                break;
-            }
-
-            // Check if current label is a Landmark
-            if ((it_label + 1 < m_VisibilityLabels[0]) || (it_label + 1 >> m_VisibilityLabels[1]))
-            {
-                continue;
-            }
-
-            cout << "Visibility Loop: It_label: " << it_label << endl;
-
-
+            // Change it to a template function
         }
-    }
-    else if (m_imageConfig->GetElementType() == ElementType::tdouble)
-    {
-        // Change it to a template function
-    }
 
+    }
 
 
     mat = mat(cropRect);
