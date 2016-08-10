@@ -62,8 +62,6 @@ public:
     virtual ChunkPtr GetChunk(size_t chunkId) override
     {
         auto sequenceDescription = m_imageSequences[chunkId];
-        //cout << "GetChunk " << chunkId << " : "<< sequenceDescription.m_path  << endl;
-
         return std::make_shared<ImageChunk<labelType,PrecisionType>>(sequenceDescription, *this);
     }
 
@@ -154,9 +152,6 @@ private:
         if (!std::getline(ss, imagePath, '\t'))
             RuntimeError("Could not read map file, line %" PRIu64 " in file %s.", lineIndex, mapPath.c_str());
 
-        cout << line << '\n';
-        //cout << imagePath << '\n';
-
         for (size_t i = 0; i < m_labelDimension; ++i)
         {
             auto invoke_error = [=]()
@@ -171,12 +166,10 @@ private:
             value = static_cast<PrecisionType>(strtod(read.c_str(), &eptr));
             if (read.c_str() == eptr || errno == ERANGE)
                 invoke_error();
-            result.push_back(value);
 
-            //cout << "Label: " <<read.c_str() << '\n';
+            result.push_back(value);
         }
 
-        
         description.m_path = imagePath;
         description.m_label = result;
     };
@@ -199,11 +192,11 @@ private:
         description.m_numberOfSamples = 1;
         description.m_isValid = true;
 
-        // NOTE: got through each line in Cfg file
         for (size_t lineIndex = 0; std::getline(mapFile, line); ++lineIndex)
         {
             parseLine(line, lineIndex, mapPath, description);
             std::string imagePath = description.m_path;
+
             for (size_t start = curId; curId < start + itemsPerLine; curId++)
             {
                 description.m_id = curId;
@@ -321,9 +314,6 @@ private:
     void CreateLabelFor(ImageSequenceDescription<LabelType::Regression, PrecisionType>& desc, DenseSequenceData& data)
     {
         data.m_data = static_cast<void*>(desc.m_label.data());
-
-        //PrecisionType *dat = static_cast<PrecisionType*>(data.m_data);
-        //cout << "ImageChunk::CreateLabelFor: " << dat[0] << " " << dat[1] << " " << dat[2] << " " << dat[3] << endl;
     }
 
     // whether images shall be loaded in grayscale 

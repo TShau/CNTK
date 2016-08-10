@@ -11,7 +11,6 @@
 #include <inttypes.h>
 #include "SequencePacker.h"
 #include "ElementTypeUtils.h"
-#include <iostream>
 
 namespace Microsoft { namespace MSR { namespace CNTK {
 
@@ -47,22 +46,7 @@ Minibatch SequencePacker::ReadMinibatch()
     {
         return minibatch;
     }
-    /*
-    cout << "Sequence Packer ID : " << batch[0][0]->m_id << endl;
-    for (int j = 0; j < batch[1].size(); ++j)
-    {
-        std::vector<SequenceDataPtr> labelPtr;
-        batch[1][j]->m_chunk->GetSequence(batch[0][j]->m_id, labelPtr);
-        float *dat = reinterpret_cast<float*>(labelPtr[1]->m_data);
-        cout << "Sequence Packer Label " << dat[0] << " " << dat[1] << " " << dat[2] << " " << dat[3] << endl;
-        dat[0] = (float)0.9;
-        dat[1] = (float)0.9;
-        dat[2] = (float)0.9;
-        dat[3] = (float)0.9;
-        cout << "Sequence Packer Label " << dat[0] << " " << dat[1] << " " << dat[2] << " " << dat[3] << endl;
-    }
-    */ 
-    cout << endl;
+    
     assert(m_outputStreamDescriptions.size() == batch.size());
 
     for (int streamIndex = 0; streamIndex < batch.size(); ++streamIndex)
