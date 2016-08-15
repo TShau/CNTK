@@ -84,7 +84,18 @@ public:
         return m_elementType;
     }
 
+    size_t GetLabelDim() const
+    {
+        return m_labelDimension;
+    }
+
+    intargvector GetLabelLandmarks() const
+    {
+        return m_labelLandmarks;
+    }
+
     static CropType ParseCropType(const std::string &src);
+    static LabelType ParseLabelType(const std::string &src);
 
 private:
     ImageConfigHelper(const ImageConfigHelper&) = delete;
@@ -99,6 +110,8 @@ private:
     CropType m_cropType;
     LabelType m_labelType;
     ElementType m_elementType;
+    size_t m_labelDimension;
+    intargvector m_labelLandmarks;
 };
 
 typedef std::shared_ptr<ImageConfigHelper> ImageConfigHelperPtr;

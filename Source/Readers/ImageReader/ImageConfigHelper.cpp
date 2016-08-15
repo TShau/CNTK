@@ -41,7 +41,7 @@ ImageConfigHelper::ImageConfigHelper(const ConfigParameters& config)
     }
 
     ConfigParameters labelSection = config(labelNames[0]);
-    size_t labelDimension = labelSection("labelDim");
+    m_labelDimension = labelSection("labelDim");
 
     std::string type = labelSection(L"labelType", "classification");
     if (AreEqualIgnoreCase(type, "classification"))
@@ -67,7 +67,7 @@ ImageConfigHelper::ImageConfigHelper(const ConfigParameters& config)
     auto labels = std::make_shared<StreamDescription>();
     labels->m_id = 1;
     labels->m_name = msra::strfun::utf16(labelSection.ConfigName());
-    labels->m_sampleLayout = std::make_shared<TensorShape>(labelDimension);
+    labels->m_sampleLayout = std::make_shared<TensorShape>(m_labelDimension);
     labels->m_storageType = m_labelType == LabelType::Classification ? StorageType::sparse_csc : StorageType::dense;
     m_streams.push_back(labels);
 
@@ -152,6 +152,21 @@ CropType ImageConfigHelper::ParseCropType(const std::string &src)
     }
 
     RuntimeError("Invalid crop type: %s.", src.c_str());
+}
+
+LabelType ImageConfigHelper::ParseLabelType(const std::string &src)
+{
+    if (src.empty() || AreEqualIgnoreCase(src, "classification"))
+    {
+        return LabelType::Classification;
+    }
+
+    if (AreEqualIgnoreCase(src, "regression"))
+    {
+        return LabelType::Regression;
+    }
+
+    RuntimeError("Invalid label type: %s.", src.c_str());
 }
 
 }}}

@@ -10,6 +10,7 @@
 #include "Transformer.h"
 #include "SequenceEnumerator.h"
 #include "ExceptionCapture.h"
+#include <iostream>
 
 namespace Microsoft { namespace MSR { namespace CNTK {
 
@@ -79,6 +80,19 @@ public:
             {
                 for (auto& t : m_transformations)
                 {
+                    
+
+                    auto labelSequence = sequences.m_data[1][sequenceId];
+
+
+                    auto inputSequenceLabel = static_cast<const DenseSequenceData&>(*labelSequence.get());
+                    std::vector<SequenceDataPtr> labelPtr;
+                    inputSequenceLabel.m_chunk->GetSequence(4, labelPtr);
+                    double *dat = reinterpret_cast<double*>(labelPtr[1]->m_data);
+                    double *label_x = &dat[0];
+                    double *label_y = &dat[1];
+                    cout << "Landmarks: " << label_x << " " << label_y << endl;
+
                     sequences.m_data[t.second][sequenceId] = t.first.m_transformer->Transform(sequences.m_data[t.second][sequenceId]);
                 }
             }, j);

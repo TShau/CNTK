@@ -69,6 +69,11 @@ SequenceDataPtr ImageTransformerBase::Transform(SequenceDataPtr sequence)
     auto result = std::make_shared<ImageSequenceData>();
     int type = CV_MAKETYPE(m_imageElementType, channels);
     cv::Mat buffer = cv::Mat(rows, columns, type, inputSequence.m_data);
+    
+    //std::vector<SequenceDataPtr> labelPtr;
+    //inputSequence.m_chunk->GetSequence(sequence->m_id, labelPtr);
+
+    //Apply(sequence->m_id, buffer, labelPtr[1]);
     Apply(sequence->m_id, buffer);
     if (!buffer.isContinuous())
     {
@@ -106,7 +111,7 @@ CropTransformer::CropTransformer(const ConfigParameters& config) : ImageTransfor
     m_jitterType = ParseJitterType(config(L"jitterType", ""));
 
     m_cropType = ImageConfigHelper::ParseCropType(config(L"cropType", ""));
-
+    m_labelType = ImageConfigHelper::ParseLabelType(config(L"labelType", "classification"));
     if (!config.ExistsCurrent(L"hflip"))
     {
         m_hFlip = m_cropType == CropType::Random;
@@ -154,8 +159,30 @@ void CropTransformer::Apply(size_t id, cv::Mat &mat)
     }
 
     int viewIndex = m_cropType == CropType::MultiView10 ? (int)(id % 10) : 0;
+    
+    cv::Rect cropRect = GetCropRect(m_cropType, viewIndex, mat.rows, mat.cols, ratio, *rng);
+    
+    // CROPPING REGRESSION LABELS
+    // First do the crop transformation for the Regression-Labels, then crop the Image
 
-    mat = mat(GetCropRect(m_cropType, viewIndex, mat.rows, mat.cols, ratio, *rng));
+    //Todo imageconfighelper::GetLabeltypy
+    /*
+    if (m_labelType == LabelType::Regression)
+    {
+        if (m_inputStream.m_elementType == ElementType::tfloat)
+        {
+            float type = 0.0;
+            RegressionTransform(type, mat, cropRect, labelPtr);
+        }
+        else
+        {
+            double type = 0.0;
+            RegressionTransform(type, mat, cropRect, labelPtr);
+        }
+
+    }
+    */
+    mat = mat(cropRect);
     if ((m_hFlip && std::bernoulli_distribution()(*rng)) ||
         viewIndex >= 5)
     {
@@ -279,6 +306,111 @@ cv::Rect CropTransformer::GetCropRect(CropType type, int viewIndex, int crow, in
     assert(0 <= xOff && xOff <= ccol - cropSizeX);
     assert(0 <= yOff && yOff <= crow - cropSizeY);
     return cv::Rect(xOff, yOff, cropSizeX, cropSizeY);
+}
+
+template <class T> void CropTransformer::RegressionTransform(T dummy, cv::Mat &mat, cv::Rect cropRect, SequenceDataPtr labelPtr)
+{
+    T *dat = reinterpret_cast<T*>(labelPtr->m_data);
+    std::map<int, bool> visibility_map;
+
+    //Crop Landmarks
+    for (int it_label = 0; it_label < m_labelDimension; it_label = it_label += 2)
+    {
+        /*
+        From Config file, check if selected Label ist soft or hard cropped.
+        Landmark labels are regarded as 2D-coordinates (f.e. Landmarks), and will be transformed during Crop-Transformation.
+        Also the index of the For Loop should therefore incremented with 2
+        Visibility labels are regarded as values and between 0 and 1 and correspont to the Landmarks in sequence.
+        If after cropping a Landmark is cut out, the correspondin Visibility label value turns zero
+        */
+
+        if (m_cropLandmark == CropModeLandmark::none)
+        {
+            break;
+        }
+
+        // Check if current label is a Landmark
+        if ((it_label + 1 < m_LandmarkLabels[0]) || (it_label + 1 > m_LandmarkLabels[1]))
+        {
+            continue;
+        }
+
+        // Set scaling factor for relative Cropping
+        std::vector<T> factor_rel_transform;
+        if (m_relativeCropping)
+        {
+            factor_rel_transform.push_back(cropRect.width);
+            factor_rel_transform.push_back(cropRect.height);
+        }
+        else
+        {
+            factor_rel_transform = vector<T>(2, 1);
+        }
+
+        T *label_x = &dat[it_label];
+        T *label_y = &dat[it_label + 1];
+
+        //cout << "Before Cropping Landmark ID  " << ((it_label + 1) / 2) << " : " << *label_x << " " << *label_y << endl;
+
+        *label_x = (*label_x * (T)mat.cols - (T)cropRect.x) / factor_rel_transform.at(0);
+        *label_y = (*label_y * (T)mat.rows - (T)cropRect.y) / factor_rel_transform.at(1);
+        cout << "Landmark: Label ID " << it_label << "-" << it_label + 1 << " : " << *label_x << " " << *label_y << endl;
+
+        // Set label to 0.0 or NaN, if cropped outside 
+        // Set visibility label to 0 if cropped outside, by specifying on visibility_map
+
+        if ((*label_x < m_LandmarkValueMin) || (*label_x > m_LandmarkValueMax) ||
+            (*label_y < m_LandmarkValueMin) || (*label_y > m_LandmarkValueMax))
+        {
+            visibility_map.insert(std::pair<int, bool>(((it_label + 1) / 2), false));
+            if ((m_cropLandmark == CropModeLandmark::hard) || (m_cropLandmark == CropModeLandmark::both))
+            {
+                *label_x = 0.0;
+                *label_y = 0.0;
+            }
+            //NOTE: What todo iw m_cropLandmark == CropModeLandmark::both ???
+        }
+        else
+        {
+            visibility_map.insert(std::pair<int, bool>(((it_label + 1) / 2), true));
+        }
+
+    }
+
+    // Crop Visibilities
+    int it_visibility = 0;
+    for (int it_label = 0; it_label < m_labelDimension; it_label++)
+    {
+        if (m_cropVisibility == CropModeVisibility::none)
+        {
+            break;
+        }
+
+        // Loop through all Labels to check, if current label is a Visibility
+        if ((it_label + 1 < m_VisibilityLabels[0]) || (it_label + 1 >> m_VisibilityLabels[1]))
+        {
+            continue;
+        }
+
+        T *label = &dat[it_label];
+
+        // Check if to it_visibility corresponding Landmark is cropped out 
+        if (m_cropVisibility == CropModeVisibility::hard)
+        {
+            if (visibility_map.find(it_visibility)->second)
+            {
+                *label *= 1;
+            }
+            else
+            {
+                *label *= 0;
+            }
+        }
+        cout << "Visibility : Label ID " << it_label << " : " << *label << endl;
+
+        //NOTE: What should be done if CropModeVisibility::SOFT or BOTH. Does this even make sense.
+        it_visibility++;
+    }
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

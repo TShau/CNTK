@@ -64,7 +64,7 @@ public:
 
 private:
     void Apply(size_t id, cv::Mat &mat) override;
-
+    //void Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr);
 private:
     enum class RatioJitterType
     {
@@ -74,13 +74,31 @@ private:
         UniArea = 3
     };
 
+    enum class CropModeLandmark
+    {
+        soft = 0,
+        hard = 1,
+        both = 2,
+        none = 3
+    };
+
+    enum class CropModeVisibility
+    {
+        soft = 0,
+        hard = 1,
+        both = 2,
+        none = 3
+    };
+
     void StartEpoch(const EpochConfiguration &config) override;
+    template <class T> void RegressionTransform(T dummy, cv::Mat &mat, cv::Rect cropRect, SequenceDataPtr labelPtr);
 
     RatioJitterType ParseJitterType(const std::string &src);
     cv::Rect GetCropRect(CropType type, int viewIndex, int crow, int ccol, double cropRatio, std::mt19937 &rng);
 
     conc_stack<std::unique_ptr<std::mt19937>> m_rngs;
     CropType m_cropType;
+    LabelType m_labelType;
     double m_cropRatioMin;
     double m_cropRatioMax;
     RatioJitterType m_jitterType;
