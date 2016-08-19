@@ -31,7 +31,7 @@ public:
     StreamDescription Transform(const StreamDescription& inputStream) override;
 
     // Transformation of the sequence.
-    SequenceDataPtr Transform(SequenceDataPtr sequence) override;
+    SequenceDataPtr Transform(SequenceDataPtr sequence, SequenceDataPtr label_sequence) override;
 
 protected:
     // Seed  getter.
@@ -45,13 +45,14 @@ protected:
     using UniIntT = std::uniform_int_distribution<int>;
 
     // The only function that should be redefined by the inherited classes.
-    virtual void Apply(size_t id, cv::Mat &from) = 0;
+    virtual void Apply(size_t id, cv::Mat &from, SequenceDataPtr labelPtr) = 0;
 
 protected:
     StreamDescription m_inputStream;
     StreamDescription m_outputStream;
     unsigned int m_seed;
     int m_imageElementType;
+    size_t m_labelDimension;
     conc_stack<std::unique_ptr<std::mt19937>> m_rngs;
 };
 
@@ -63,7 +64,8 @@ public:
     explicit CropTransformer(const ConfigParameters& config);
 
 private:
-    void Apply(size_t id, cv::Mat &mat) override;
+
+    void Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr) override;
     //void Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr);
 private:
     enum class RatioJitterType
@@ -89,7 +91,8 @@ private:
         both = 2,
         none = 3
     };
-
+    void InitFeaturesFromConfig(const ConfigParameters &config);
+    void InitLabelsFromConfig(const ConfigParameters &config);
     void StartEpoch(const EpochConfiguration &config) override;
     template <class T> void RegressionTransform(T dummy, cv::Mat &mat, cv::Rect cropRect, SequenceDataPtr labelPtr);
 
@@ -105,6 +108,13 @@ private:
     bool m_hFlip;
     doubleargvector m_aspectRatioRadius;
     double m_curAspectRatioRadius;
+    intargvector m_LandmarkLabels;
+    intargvector m_VisibilityLabels;
+    double m_LandmarkValueMin;
+    double m_LandmarkValueMax;
+    bool m_relativeCropping;
+    CropModeLandmark m_cropLandmark;
+    CropModeVisibility m_cropVisibility;
 };
 
 // Scale transformation of the image.
@@ -117,7 +127,7 @@ public:
     StreamDescription Transform(const StreamDescription& inputStream) override;
 
 private:
-    void Apply(size_t id, cv::Mat &mat) override;
+    void Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr) override;
 
     using StrToIntMapT = std::unordered_map<std::string, int>;
     StrToIntMapT m_interpMap;
@@ -136,7 +146,7 @@ public:
     explicit MeanTransformer(const ConfigParameters& config);
 
 private:
-    void Apply(size_t id, cv::Mat &mat) override;
+    void Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr) override;
 
     cv::Mat m_meanImg;
 };
@@ -153,7 +163,7 @@ public:
     StreamDescription Transform(const StreamDescription& inputStream) override;
 
     // Transformation of the sequence.
-    SequenceDataPtr Transform(SequenceDataPtr sequence) override;
+    SequenceDataPtr Transform(SequenceDataPtr sequence, SequenceDataPtr label_sequence) override;
 
 private:
     template <class TElement>
@@ -176,7 +186,7 @@ public:
 private:
     void StartEpoch(const EpochConfiguration &config) override;
 
-    void Apply(size_t id, cv::Mat &mat) override;
+    void Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr) override;
     template <typename ElemType>
     void Apply(cv::Mat &mat);
 
@@ -199,7 +209,7 @@ public:
 private:
     void StartEpoch(const EpochConfiguration &config) override;
 
-    void Apply(size_t id, cv::Mat &mat) override;
+    void Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr) override;
     template <typename ElemType>
     void Apply(cv::Mat &mat);
 

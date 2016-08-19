@@ -57,10 +57,12 @@ ImageReader::ImageReader(MemoryProviderPtr provider,
 
     // Create transformations for a single feature stream.
     std::wstring featureName = m_streams[configHelper.GetFeatureStreamId()]->m_name;
+    std::wstring labelName = m_streams[configHelper.GetLabelStreamId()]->m_name;
     ConfigParameters featureStream = config(featureName);
+    ConfigParameters labelStream = config(labelName);
 
     std::vector<Transformation> transformations;
-    transformations.push_back(Transformation{ std::make_shared<CropTransformer>(featureStream), featureName });
+    transformations.push_back(Transformation{ std::make_shared<CropTransformer>(config), featureName });
     transformations.push_back(Transformation{ std::make_shared<ScaleTransformer>(featureStream), featureName });
     transformations.push_back(Transformation{ std::make_shared<ColorTransformer>(featureStream), featureName });
     transformations.push_back(Transformation{ std::make_shared<IntensityTransformer>(featureStream), featureName });

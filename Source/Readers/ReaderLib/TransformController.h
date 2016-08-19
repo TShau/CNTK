@@ -83,7 +83,7 @@ public:
                     
 
                     auto labelSequence = sequences.m_data[1][sequenceId];
-
+                    /*
                     auto inputSequenceLabel = static_cast<const DenseSequenceData&>(*labelSequence.get());
                     std::vector<SequenceDataPtr> labelPtr;
                     inputSequenceLabel.m_chunk->GetSequence(sequences.m_data[0][sequenceId]->m_id, labelPtr);
@@ -91,8 +91,8 @@ public:
                     float *label_x = &dat[0];
                     float *label_y = &dat[1];
                     cout << "Landmarks: " << *label_x << " " << *label_y << endl;
-
-                    sequences.m_data[t.second][sequenceId] = t.first.m_transformer->Transform(sequences.m_data[t.second][sequenceId]);
+                    */
+                    sequences.m_data[t.second][sequenceId] = t.first.m_transformer->Transform(sequences.m_data[t.second][sequenceId], labelSequence);
                 }
             }, j);
         }

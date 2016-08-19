@@ -12,6 +12,7 @@
 #include "ConcStack.h"
 #include "StringUtil.h"
 #include "ElementTypeUtils.h"
+#include <iostream>
 
 namespace Microsoft { namespace MSR { namespace CNTK 
 {
@@ -57,7 +58,7 @@ StreamDescription ImageTransformerBase::Transform(const StreamDescription& input
 }
 
 // Transforms a single sequence as open cv dense image. Called once per sequence.
-SequenceDataPtr ImageTransformerBase::Transform(SequenceDataPtr sequence)
+SequenceDataPtr ImageTransformerBase::Transform(SequenceDataPtr sequence, SequenceDataPtr label_sequence)
 {
     auto inputSequence = static_cast<const DenseSequenceData&>(*sequence);
 
@@ -70,11 +71,26 @@ SequenceDataPtr ImageTransformerBase::Transform(SequenceDataPtr sequence)
     int type = CV_MAKETYPE(m_imageElementType, channels);
     cv::Mat buffer = cv::Mat(rows, columns, type, inputSequence.m_data);
     
-    //std::vector<SequenceDataPtr> labelPtr;
-    //inputSequence.m_chunk->GetSequence(sequence->m_id, labelPtr);
+    //Get Labels
+    auto inputSequenceLabel = static_cast<const DenseSequenceData&>(*label_sequence.get());
+    std::vector<SequenceDataPtr> labelPtr;
+    SequenceDataPtr bufferLabel;
+    if (sequence->m_id != 0)
+    {
+        inputSequence.m_chunk->GetSequence(sequence->m_id, labelPtr);
+        bufferLabel = labelPtr[1];
+    }
+    else
+    {
+        bufferLabel = NULL;
+    }
 
-    //Apply(sequence->m_id, buffer, labelPtr[1]);
-    Apply(sequence->m_id, buffer);
+    //float *dat = reinterpret_cast<float*>(labelPtr[1]->m_data);
+    //float *label_x = &dat[0];
+    //float *label_y = &dat[1];
+    //cout << "Landmarks: " << *label_x << " " << *label_y << endl;
+
+    Apply(sequence->m_id, buffer, bufferLabel);
     if (!buffer.isContinuous())
     {
         buffer = buffer.clone();
@@ -96,6 +112,14 @@ SequenceDataPtr ImageTransformerBase::Transform(SequenceDataPtr sequence)
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 CropTransformer::CropTransformer(const ConfigParameters& config) : ImageTransformerBase(config)
 {
+    ImageConfigHelper configHelper(config);
+    std::vector<StreamDescriptionPtr> streams = configHelper.GetStreams();
+    std::wstring featureName = streams[configHelper.GetFeatureStreamId()]->m_name;
+    std::wstring labelName = streams[configHelper.GetLabelStreamId()]->m_name;
+    ConfigParameters featureStream = config(featureName);
+    ConfigParameters labelStream = config(labelName);
+
+    /*
     floatargvector cropRatio = config(L"cropRatio", "1.0");
     m_cropRatioMin = cropRatio[0];
     m_cropRatioMax = cropRatio[1];
@@ -110,8 +134,49 @@ CropTransformer::CropTransformer(const ConfigParameters& config) : ImageTransfor
 
     m_jitterType = ParseJitterType(config(L"jitterType", ""));
 
-    m_cropType = ImageConfigHelper::ParseCropType(config(L"cropType", ""));
+    if (!config.ExistsCurrent(L"hflip"))
+    {
+        m_hFlip = m_cropType == CropType::Random;
+    }
+    else
+    {
+        m_hFlip = config(L"hflip");
+    }
+
+    m_aspectRatioRadius = config(L"aspectRatioRadius", ConfigParameters::Array(doubleargvector(vector<double>{0.0})));
+    */
+
+    
     m_labelType = ImageConfigHelper::ParseLabelType(config(L"labelType", "classification"));
+
+    InitFeaturesFromConfig(featureStream);
+    InitLabelsFromConfig(labelStream);
+}
+
+void CropTransformer::InitFeaturesFromConfig(const ConfigParameters &config)
+{
+    /*
+    ImageConfigHelper confhelp(config);
+
+    intargvector labelLandmarks = confhelp.GetLabelLandmarks();
+    cout << "labelLandmarks " << labelLandmarks[0] << " "<< labelLandmarks.size() << endl;
+    size_t labelDim = confhelp.GetLabelDim();
+    */
+    m_cropType = ImageConfigHelper::ParseCropType(config(L"cropType", ""));
+    floatargvector cropRatio = config(L"cropRatio", "1.0");
+    m_cropRatioMin = cropRatio[0];
+    m_cropRatioMax = cropRatio[1];
+
+    if (!(0 < m_cropRatioMin && m_cropRatioMin <= 1.0) ||
+        !(0 < m_cropRatioMax && m_cropRatioMax <= 1.0) ||
+        m_cropRatioMin > m_cropRatioMax)
+    {
+        RuntimeError("Invalid cropRatio value, must be > 0 and <= 1. cropMin must "
+                     "<= cropMax");
+    }
+
+    m_jitterType = ParseJitterType(config(L"jitterType", ""));
+
     if (!config.ExistsCurrent(L"hflip"))
     {
         m_hFlip = m_cropType == CropType::Random;
@@ -124,6 +189,132 @@ CropTransformer::CropTransformer(const ConfigParameters& config) : ImageTransfor
     m_aspectRatioRadius = config(L"aspectRatioRadius", ConfigParameters::Array(doubleargvector(vector<double>{0.0})));
 }
 
+void CropTransformer::InitLabelsFromConfig(const ConfigParameters &config)
+{
+    m_labelDimension = config(L"labelDim");
+
+    if (m_labelDimension<0)
+    {
+        RuntimeError("Invalid labelDim value, must be > 0 ");
+    }
+    //m_labelType = ImageConfigHelper::ParseLabelType(config(L"labelType", "classification"));
+    //std::string type = config(L"labelType", "classification");
+
+    /*
+    Parse parameters if labelType="regression".
+    One way of using regression labels is learning landmarks.
+    For Landmarks, parameters like position and visibility are supported.
+    For Visibility it is assumed that the first label corresponds to the first position label, and so on.
+
+    */
+    if (m_labelType == LabelType::Regression)
+    {
+        if (config.ExistsCurrent("Landmarks"))
+        {
+            ConfigParameters LandmarkParameters = config("Landmarks");
+
+            intargvector LandmarkLabels = LandmarkParameters(L"position_indices", ConfigParameters::Array(intargvector(vector<int>(2, 0))));
+            m_LandmarkLabels = LandmarkLabels;
+            cout << "landmarks: " << m_LandmarkLabels.front() << "-" << m_LandmarkLabels.back() << endl;
+
+            intargvector VisibilityLabels = LandmarkParameters(L"visibility_indices", ConfigParameters::Array(intargvector(vector<int>(2, 0))));
+            m_VisibilityLabels = VisibilityLabels;
+            cout << "visibilities: " << m_VisibilityLabels.front() << "-" << m_VisibilityLabels.back() << endl;
+
+            std::string relTransformation = LandmarkParameters(L"relative_transformation", "true");
+            m_relativeCropping = AreEqualIgnoreCase(relTransformation, "true") ? true : false;
+            cout << "relative Crop : " << relTransformation << endl;
+
+            std::string cropLandmark = LandmarkParameters(L"crop_landmark", "soft");
+            if (AreEqualIgnoreCase(cropLandmark, "soft"))
+            {
+                m_cropLandmark = CropModeLandmark::soft;
+                cout << "crop_lm = soft" << endl;
+            }
+            else if (AreEqualIgnoreCase(cropLandmark, "hard"))
+            {
+                m_cropLandmark = CropModeLandmark::hard;
+                cout << "crop_lm = hard" << endl;
+            }
+            else if (AreEqualIgnoreCase(cropLandmark, "both"))
+            {
+                m_cropLandmark = CropModeLandmark::both;
+                cout << "crop_lm = both" << endl;
+            }
+            else if (AreEqualIgnoreCase(cropLandmark, "none"))
+            {
+                m_cropLandmark = CropModeLandmark::none;
+                cout << "crop_lm = none" << endl;
+            }
+            else
+            {
+                RuntimeError("Invalid value for crop_landmark. Parameter must be either soft/hard/both/none");
+            }
+
+            std::string cropVisibility = LandmarkParameters(L"crop_visibility", "hard");
+            if (AreEqualIgnoreCase(cropVisibility, "soft"))
+            {
+                m_cropVisibility = CropModeVisibility::soft;
+                cout << "crop_vis = soft" << endl;
+            }
+            else if (AreEqualIgnoreCase(cropVisibility, "hard"))
+            {
+                m_cropVisibility = CropModeVisibility::hard;
+                cout << "crop_vis = hard" << endl;
+            }
+            else if (AreEqualIgnoreCase(cropVisibility, "both"))
+            {
+                m_cropVisibility = CropModeVisibility::both;
+                cout << "crop_vis = both" << endl;
+            }
+            else if (AreEqualIgnoreCase(cropVisibility, "none"))
+            {
+                m_cropVisibility = CropModeVisibility::none;
+                cout << "crop_vis = none" << endl;
+            }
+            else
+            {
+                RuntimeError("Invalid value for crop_visibility. Parameter must be either soft/hard/both/none");
+            }
+
+            m_LandmarkValueMin = LandmarkParameters(L"min_value", 0.0);
+            cout << "landmark_min " << m_LandmarkValueMin << endl;
+
+            m_LandmarkValueMax = LandmarkParameters(L"max_value", 2.0);
+            cout << "landmark_max " << m_LandmarkValueMax << endl;
+
+            //Check if parameter in configfile are correct
+            if ((m_LandmarkLabels.back() == 0) && (m_LandmarkLabels.front() == 0))
+            {
+                RuntimeError("No Landmark-Labels specified in Section Landmarks");
+            }
+
+            if ((m_LandmarkLabels.back() - m_LandmarkLabels.front() + 1) < ((m_VisibilityLabels.back() - m_VisibilityLabels.front() + 1) * 2))
+            {
+                RuntimeError("Invalid values for ""Landmarks"" and ""Visibilities"". There are more Visibility points than Landmarks ");
+            }
+
+            if ((m_LandmarkLabels.back() - m_LandmarkLabels.front() + 1) % 2 != 0)
+            {
+                RuntimeError("Invalid values for ""Landmarks"". Value range must be an even number, since Landmarks represent 2D Coordinates");
+            }
+
+            if ((m_LandmarkLabels.front() > m_LandmarkLabels.back()) ||
+                (m_VisibilityLabels.front() > m_VisibilityLabels.back()) ||
+                (m_LandmarkLabels.front() < 0) || (m_LandmarkLabels.back() < 0) ||
+                (m_VisibilityLabels.front() < 0) || (m_VisibilityLabels.back() < 0))
+            {
+                RuntimeError("Invalid values at Labels. Notation ""Landmarks"" and ""Visibilities"" must be ranged values. E.g. 1:5.");
+            }
+
+            if ((m_LandmarkLabels.back() > m_labelDimension) || (m_VisibilityLabels.back() > m_labelDimension))
+            {
+                RuntimeError("Invalid values at Labels. Indices must not exceed labelDim.");
+            }
+        }
+    }
+}
+
 void CropTransformer::StartEpoch(const EpochConfiguration &config)
 {
     m_curAspectRatioRadius = m_aspectRatioRadius[config.m_epochIndex];
@@ -132,7 +323,7 @@ void CropTransformer::StartEpoch(const EpochConfiguration &config)
     ImageTransformerBase::StartEpoch(config);
 }
 
-void CropTransformer::Apply(size_t id, cv::Mat &mat)
+void CropTransformer::Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr)
 {
     auto seed = GetSeed();
     auto rng = m_rngs.pop_or_create([seed]() { return std::make_unique<std::mt19937>(seed); });
@@ -166,22 +357,22 @@ void CropTransformer::Apply(size_t id, cv::Mat &mat)
     // First do the crop transformation for the Regression-Labels, then crop the Image
 
     //Todo imageconfighelper::GetLabeltypy
-    /*
+    
     if (m_labelType == LabelType::Regression)
     {
         if (m_inputStream.m_elementType == ElementType::tfloat)
         {
-            float type = 0.0;
+            float type = 1.0;
             RegressionTransform(type, mat, cropRect, labelPtr);
         }
         else
         {
-            double type = 0.0;
+            double type = 1.0;
             RegressionTransform(type, mat, cropRect, labelPtr);
         }
 
     }
-    */
+    
     mat = mat(cropRect);
     if ((m_hFlip && std::bernoulli_distribution()(*rng)) ||
         viewIndex >= 5)
@@ -310,6 +501,12 @@ cv::Rect CropTransformer::GetCropRect(CropType type, int viewIndex, int crow, in
 
 template <class T> void CropTransformer::RegressionTransform(T dummy, cv::Mat &mat, cv::Rect cropRect, SequenceDataPtr labelPtr)
 {
+    //TODO: make this template function without <T dummy>, where T is precisiontype
+    dummy++;
+    if (labelPtr == NULL) {
+        return;
+    }
+
     T *dat = reinterpret_cast<T*>(labelPtr->m_data);
     std::map<int, bool> visibility_map;
 
@@ -326,7 +523,7 @@ template <class T> void CropTransformer::RegressionTransform(T dummy, cv::Mat &m
 
         if (m_cropLandmark == CropModeLandmark::none)
         {
-            break;
+            return;
         }
 
         // Check if current label is a Landmark
@@ -336,7 +533,7 @@ template <class T> void CropTransformer::RegressionTransform(T dummy, cv::Mat &m
         }
 
         // Set scaling factor for relative Cropping
-        std::vector<T> factor_rel_transform;
+        std::vector<int> factor_rel_transform;
         if (m_relativeCropping)
         {
             factor_rel_transform.push_back(cropRect.width);
@@ -344,17 +541,36 @@ template <class T> void CropTransformer::RegressionTransform(T dummy, cv::Mat &m
         }
         else
         {
-            factor_rel_transform = vector<T>(2, 1);
+            factor_rel_transform = vector<int>(2, 1);
         }
 
+        //Get Landmarks 
         T *label_x = &dat[it_label];
         T *label_y = &dat[it_label + 1];
 
-        //cout << "Before Cropping Landmark ID  " << ((it_label + 1) / 2) << " : " << *label_x << " " << *label_y << endl;
+        //goto next iteration if current landmark exeeds specified value range
+        if ((*label_x < m_LandmarkValueMin) || (*label_x > m_LandmarkValueMax) ||
+            (*label_y < m_LandmarkValueMin) || (*label_y > m_LandmarkValueMax))
+        {
+            continue;
+        }
 
+        //cout << "Before Cropping: Landmark Nr " << it_label << "-" << it_label + 1 << " : " << *label_x << " " << *label_y << endl;
+
+        //Normalizing 
+        T val_range = (T)m_LandmarkValueMax - (T)m_LandmarkValueMin;
+        *label_x = (*label_x - (T)m_LandmarkValueMin) / val_range;
+        *label_y = (*label_y - (T)m_LandmarkValueMin) / val_range;
+        
+        //Transform
         *label_x = (*label_x * (T)mat.cols - (T)cropRect.x) / factor_rel_transform.at(0);
         *label_y = (*label_y * (T)mat.rows - (T)cropRect.y) / factor_rel_transform.at(1);
-        cout << "Landmark: Label ID " << it_label << "-" << it_label + 1 << " : " << *label_x << " " << *label_y << endl;
+        
+        //Denormalize
+        *label_x = *label_x * val_range + (T)m_LandmarkValueMin;
+        *label_y = *label_y * val_range + (T)m_LandmarkValueMin;
+        
+        //cout << "After  Cropping: Landmark Nr " << it_label << "-" << it_label + 1 << " : " << *label_x << " " << *label_y << endl;
 
         // Set label to 0.0 or NaN, if cropped outside 
         // Set visibility label to 0 if cropped outside, by specifying on visibility_map
@@ -367,6 +583,11 @@ template <class T> void CropTransformer::RegressionTransform(T dummy, cv::Mat &m
             {
                 *label_x = 0.0;
                 *label_y = 0.0;
+            }
+            else if (m_cropLandmark == CropModeLandmark::soft)
+            {
+                *label_x = std::numeric_limits<T>::lowest();
+                *label_y = std::numeric_limits<T>::lowest();
             }
             //NOTE: What todo iw m_cropLandmark == CropModeLandmark::both ???
         }
@@ -383,11 +604,11 @@ template <class T> void CropTransformer::RegressionTransform(T dummy, cv::Mat &m
     {
         if (m_cropVisibility == CropModeVisibility::none)
         {
-            break;
+            return;
         }
 
         // Loop through all Labels to check, if current label is a Visibility
-        if ((it_label + 1 < m_VisibilityLabels[0]) || (it_label + 1 >> m_VisibilityLabels[1]))
+        if ((it_label + 1 < m_VisibilityLabels[0]) || (it_label + 1 > m_VisibilityLabels[1]))
         {
             continue;
         }
@@ -406,7 +627,7 @@ template <class T> void CropTransformer::RegressionTransform(T dummy, cv::Mat &m
                 *label *= 0;
             }
         }
-        cout << "Visibility : Label ID " << it_label << " : " << *label << endl;
+        //cout << "Visibility : Label ID " << it_label << " : " << *label << endl;
 
         //NOTE: What should be done if CropModeVisibility::SOFT or BOTH. Does this even make sense.
         it_visibility++;
@@ -455,7 +676,7 @@ StreamDescription ScaleTransformer::Transform(const StreamDescription& inputStre
     return m_outputStream;
 }
 
-void ScaleTransformer::Apply(size_t id, cv::Mat &mat)
+void ScaleTransformer::Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr)
 {
     UNUSED(id);
 
@@ -506,7 +727,7 @@ MeanTransformer::MeanTransformer(const ConfigParameters& config) : ImageTransfor
     }
 }
 
-void MeanTransformer::Apply(size_t id, cv::Mat &mat)
+void MeanTransformer::Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr)
 {
     UNUSED(id);
     assert(m_meanImg.size() == cv::Size(0, 0) ||
@@ -538,7 +759,7 @@ StreamDescription TransposeTransformer::Transform(const StreamDescription& input
 }
 
 // Transformation of the sequence.
-SequenceDataPtr TransposeTransformer::Transform(SequenceDataPtr sequence)
+SequenceDataPtr TransposeTransformer::Transform(SequenceDataPtr sequence, SequenceDataPtr label_sequence)
 {
     if (m_inputStream.m_elementType == ElementType::tdouble)
     {
@@ -626,7 +847,7 @@ void IntensityTransformer::StartEpoch(const EpochConfiguration &config)
     ImageTransformerBase::StartEpoch(config);
 }
 
-void IntensityTransformer::Apply(size_t id, cv::Mat &mat)
+void IntensityTransformer::Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr)
 {
     UNUSED(id);
 
@@ -700,7 +921,7 @@ void ColorTransformer::StartEpoch(const EpochConfiguration &config)
     ImageTransformerBase::StartEpoch(config);
 }
 
-void ColorTransformer::Apply(size_t id, cv::Mat &mat)
+void ColorTransformer::Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr)
 {
     UNUSED(id);
 
