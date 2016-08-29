@@ -75,6 +75,7 @@ SequenceDataPtr ImageTransformerBase::Transform(SequenceDataPtr sequence, Sequen
     auto inputSequenceLabel = static_cast<const DenseSequenceData&>(*label_sequence.get());
     std::vector<SequenceDataPtr> labelPtr;
     SequenceDataPtr bufferLabel;
+    
     if (sequence->m_id != 0)
     {
         inputSequence.m_chunk->GetSequence(sequence->m_id, labelPtr);
@@ -82,7 +83,9 @@ SequenceDataPtr ImageTransformerBase::Transform(SequenceDataPtr sequence, Sequen
     }
     else
     {
-        bufferLabel = NULL;
+        //bufferLabel = NULL;
+        inputSequenceLabel.m_chunk->GetSequence(sequence->m_id, labelPtr);
+        bufferLabel = labelPtr[1];
     }
 
     //float *dat = reinterpret_cast<float*>(labelPtr[1]->m_data);
@@ -321,6 +324,8 @@ void CropTransformer::StartEpoch(const EpochConfiguration &config)
     if (!(0 <= m_curAspectRatioRadius && m_curAspectRatioRadius <= 1.0))
         InvalidArgument("aspectRatioRadius must be >= 0.0 and <= 1.0");
     ImageTransformerBase::StartEpoch(config);
+    //cout << endl;
+    //cout << "New Epoch" << endl;
 }
 
 void CropTransformer::Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr)
@@ -563,8 +568,8 @@ template <class T> void CropTransformer::RegressionTransform(T dummy, cv::Mat &m
         *label_y = (*label_y - (T)m_LandmarkValueMin) / val_range;
         
         //Transform
-        *label_x = (*label_x * (T)mat.cols - (T)cropRect.x) / factor_rel_transform.at(0);
-        *label_y = (*label_y * (T)mat.rows - (T)cropRect.y) / factor_rel_transform.at(1);
+        *label_x = (*label_x * (T)mat.cols - (T)cropRect.x) / (T)factor_rel_transform.at(0);
+        *label_y = (*label_y * (T)mat.rows - (T)cropRect.y) / (T)factor_rel_transform.at(1);
         
         //Denormalize
         *label_x = *label_x * val_range + (T)m_LandmarkValueMin;
