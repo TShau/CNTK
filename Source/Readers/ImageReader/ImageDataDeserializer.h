@@ -405,10 +405,12 @@ private:
             image->m_id = sequenceId;
             image->m_numberOfSamples = 1;
             image->m_chunk = shared_from_this();
+            image->m_path = m_description.m_path;
 
             SequenceDataPtr label = createLabeledSequence<labelType>();
             label->m_chunk = shared_from_this();
             label->m_numberOfSamples = 1;
+            label->m_path = m_description.m_path;
 
             result.push_back(image);
             result.push_back(label);

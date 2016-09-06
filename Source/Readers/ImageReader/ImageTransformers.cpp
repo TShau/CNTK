@@ -13,6 +13,7 @@
 #include "StringUtil.h"
 #include "ElementTypeUtils.h"
 #include <iostream>
+#include <fstream>
 
 namespace Microsoft { namespace MSR { namespace CNTK 
 {
@@ -75,7 +76,6 @@ SequenceDataPtr ImageTransformerBase::Transform(SequenceDataPtr sequence, Sequen
     auto inputSequenceLabel = static_cast<const DenseSequenceData&>(*label_sequence.get());
     std::vector<SequenceDataPtr> labelPtr;
     SequenceDataPtr bufferLabel;
-    
     if (sequence->m_id != 0)
     {
         inputSequence.m_chunk->GetSequence(sequence->m_id, labelPtr);
@@ -83,9 +83,9 @@ SequenceDataPtr ImageTransformerBase::Transform(SequenceDataPtr sequence, Sequen
     }
     else
     {
-        //bufferLabel = NULL;
-        inputSequenceLabel.m_chunk->GetSequence(sequence->m_id, labelPtr);
-        bufferLabel = labelPtr[1];
+        bufferLabel = NULL;
+        //inputSequenceLabel.m_chunk->GetSequence(sequence->m_id, labelPtr);
+        //bufferLabel = labelPtr[1];
     }
 
     //float *dat = reinterpret_cast<float*>(labelPtr[1]->m_data);
@@ -368,12 +368,12 @@ void CropTransformer::Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr)
         if (m_inputStream.m_elementType == ElementType::tfloat)
         {
             float type = 1.0;
-            RegressionTransform(type, mat, cropRect, labelPtr);
+            CropRegressionLabels(type, mat, cropRect, labelPtr);
         }
         else
         {
             double type = 1.0;
-            RegressionTransform(type, mat, cropRect, labelPtr);
+            CropRegressionLabels(type, mat, cropRect, labelPtr);
         }
 
     }
@@ -383,6 +383,16 @@ void CropTransformer::Apply(size_t id, cv::Mat &mat, SequenceDataPtr labelPtr)
         viewIndex >= 5)
     {
         cv::flip(mat, mat, 1);
+        if (m_inputStream.m_elementType == ElementType::tfloat)
+        {
+            float type = 1.0;
+            hflipRegressionLabels(type, labelPtr);
+        }
+        else
+        {
+            double type = 1.0;
+            hflipRegressionLabels(type, labelPtr);
+        }
     }
 
     m_rngs.push(std::move(rng));
@@ -504,13 +514,15 @@ cv::Rect CropTransformer::GetCropRect(CropType type, int viewIndex, int crow, in
     return cv::Rect(xOff, yOff, cropSizeX, cropSizeY);
 }
 
-template <class T> void CropTransformer::RegressionTransform(T dummy, cv::Mat &mat, cv::Rect cropRect, SequenceDataPtr labelPtr)
+template <class T> void CropTransformer::CropRegressionLabels(T dummy, cv::Mat &mat, cv::Rect cropRect, SequenceDataPtr labelPtr)
 {
     //TODO: make this template function without <T dummy>, where T is precisiontype
     dummy++;
     if (labelPtr == NULL) {
         return;
     }
+    //ofstream rect_file("E:\\Shau\\Kaggle_2\\Logs\\Crop_Rects.txt", std::ios_base::app);
+    //rect_file << labelPtr->m_path << ": Croprect: " << cropRect.x << " " << cropRect.y << " " << cropRect.width << " " << cropRect.height << endl;
 
     T *dat = reinterpret_cast<T*>(labelPtr->m_data);
     std::map<int, bool> visibility_map;
@@ -552,14 +564,19 @@ template <class T> void CropTransformer::RegressionTransform(T dummy, cv::Mat &m
         //Get Landmarks 
         T *label_x = &dat[it_label];
         T *label_y = &dat[it_label + 1];
-
-        //goto next iteration if current landmark exeeds specified value range
+        
+        //goto next iteration if current landmark exeeds specified value range, for example NaN
         if ((*label_x < m_LandmarkValueMin) || (*label_x > m_LandmarkValueMax) ||
             (*label_y < m_LandmarkValueMin) || (*label_y > m_LandmarkValueMax))
         {
+            //ofstream logfile("E:\\Shau\\Kaggle_2\\Logs\\crop_logs.txt", std::ios_base::app);
+            //logfile << labelPtr->m_path << ": Croprect: " << cropRect.x << " " << cropRect.y << " " << cropRect.width << " " << cropRect.height
+            //    << " Landmark Nr " << it_label << "-" << it_label + 1 << ": " << *label_x << " " << *label_y << "  ->  NaN" << endl;
             continue;
         }
 
+        //T old_label_x = *label_x;
+        //T old_label_y = *label_y;
         //cout << "Before Cropping: Landmark Nr " << it_label << "-" << it_label + 1 << " : " << *label_x << " " << *label_y << endl;
 
         //Normalizing 
@@ -576,6 +593,12 @@ template <class T> void CropTransformer::RegressionTransform(T dummy, cv::Mat &m
         *label_y = *label_y * val_range + (T)m_LandmarkValueMin;
         
         //cout << "After  Cropping: Landmark Nr " << it_label << "-" << it_label + 1 << " : " << *label_x << " " << *label_y << endl;
+
+        //ofstream logfile("E:\\Shau\\Kaggle_2\\Logs\\crop_logs.txt", std::ios_base::app);
+        //logfile << labelPtr->m_path << ": Croprect: " << cropRect.x << " " << cropRect.y << " " << cropRect.width << " " << cropRect.height
+        //    << " Landmark Nr " << it_label << "-" << it_label + 1 << ": " << old_label_x << " " << old_label_y << "  ->  "
+        //    << *label_x << " " << *label_y << endl;
+
 
         // Set label to 0.0 or NaN, if cropped outside 
         // Set visibility label to 0 if cropped outside, by specifying on visibility_map
@@ -636,6 +659,48 @@ template <class T> void CropTransformer::RegressionTransform(T dummy, cv::Mat &m
 
         //NOTE: What should be done if CropModeVisibility::SOFT or BOTH. Does this even make sense.
         it_visibility++;
+    }
+}
+
+template <class T> void CropTransformer::hflipRegressionLabels(T dummy, SequenceDataPtr labelPtr)
+{
+    dummy++;
+    if ((labelPtr == NULL) || (m_cropLandmark == CropModeLandmark::none)) {
+        return;
+    }
+
+    T *dat = reinterpret_cast<T*>(labelPtr->m_data);
+
+    //Crop Landmarks
+    for (int it_label = 0; it_label < m_labelDimension; it_label = it_label += 2)
+    {
+        // Check if current label is a Landmark
+        if ((it_label + 1 < m_LandmarkLabels[0]) || (it_label + 1 > m_LandmarkLabels[1]))
+        {
+            continue;
+        }
+
+        //Get Landmarks 
+        T *label_x = &dat[it_label];
+        T *label_y = &dat[it_label + 1];
+
+        if ((*label_x < m_LandmarkValueMin) || (*label_x > m_LandmarkValueMax) ||
+            (*label_y < m_LandmarkValueMin) || (*label_y > m_LandmarkValueMax))
+        {
+            continue;
+        }
+
+        //Normalizing 
+        T val_range = (T)m_LandmarkValueMax - (T)m_LandmarkValueMin;
+        *label_x = (*label_x - (T)m_LandmarkValueMin) / val_range;
+        //*label_y = (*label_y - (T)m_LandmarkValueMin) / val_range;
+
+        //Transform
+        //*label_x = (T)1.0 - *label_x;
+
+        //Denormalize
+        *label_x = *label_x * val_range + (T)m_LandmarkValueMin;
+        //*label_y = *label_y * val_range + (T)m_LandmarkValueMin;
     }
 }
 
@@ -848,6 +913,13 @@ IntensityTransformer::IntensityTransformer(const ConfigParameters &config) : Ima
 
 void IntensityTransformer::StartEpoch(const EpochConfiguration &config)
 {
+    //ofstream logfile("E:\\Shau\\Kaggle_2\\Logs\\crop_logs.txt", std::ios_base::app);
+    //logfile << endl;
+    //logfile << "Start Epoch" << endl;
+    // ofstream rect_file("E:\\Shau\\Kaggle_2\\Logs\\Crop_Rects.txt", std::ios_base::app);
+    //rect_file << endl;
+    //rect_file << "Start Epoch" << endl;
+
     m_curStdDev = m_stdDev[config.m_epochIndex];
     ImageTransformerBase::StartEpoch(config);
 }

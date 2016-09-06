@@ -94,7 +94,8 @@ private:
     void InitFeaturesFromConfig(const ConfigParameters &config);
     void InitLabelsFromConfig(const ConfigParameters &config);
     void StartEpoch(const EpochConfiguration &config) override;
-    template <class T> void RegressionTransform(T dummy, cv::Mat &mat, cv::Rect cropRect, SequenceDataPtr labelPtr);
+    template <class T> void CropRegressionLabels(T dummy, cv::Mat &mat, cv::Rect cropRect, SequenceDataPtr labelPtr);
+    template <class T> void hflipRegressionLabels(T dummy, SequenceDataPtr labelPtr);
 
     RatioJitterType ParseJitterType(const std::string &src);
     cv::Rect GetCropRect(CropType type, int viewIndex, int crow, int ccol, double cropRatio, std::mt19937 &rng);
